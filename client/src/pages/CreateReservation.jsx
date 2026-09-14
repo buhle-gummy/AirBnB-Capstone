@@ -75,7 +75,7 @@ function CreateReservation() {
     }
     try {
       setSubmitting(true);
-      const r = await fetch("http://localhost:5000/api/reservations", {
+      const r = await fetch("https://airbnb-capstone-server.onrender.com/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
