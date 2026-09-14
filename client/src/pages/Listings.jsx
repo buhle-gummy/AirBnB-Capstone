@@ -15,7 +15,7 @@ function Listings() {
   const loadListings = async () => {
     try {
       setLoading(true);
-      const response = await fetch("http://localhost:5000/api/accommodations");
+      const response = await fetch("https://airbnb-capstone-server.onrender.com/");
       const data = await response.json();
       if (!response.ok)
         throw new Error(data.message || "Could not load listings");
