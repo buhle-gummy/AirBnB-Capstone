@@ -45,7 +45,7 @@ function Dashboard() {
         }
 
         const reservationsResponse = await fetch(
-          "http://localhost:5000/api/reservations",
+          "https://airbnb-capstone-server.onrender.com/",
           {
             method: "GET",
             headers: {
