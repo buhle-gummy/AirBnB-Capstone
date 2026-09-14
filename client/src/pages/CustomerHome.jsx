@@ -124,7 +124,7 @@ function CustomerHome() {
   }, [theme]);
 
   useEffect(() => {
-    fetch("http://localhost:5000/api/accommodations")
+    fetch("https://airbnb-capstone-server.onrender.com/")
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok)
