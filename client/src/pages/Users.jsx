@@ -25,7 +25,7 @@ function Users() {
       }
 
       const response = await fetch(
-        "http://localhost:5000/api/users",
+        "https://airbnb-capstone-server.onrender.com/",
         {
           method: "GET",
           headers: {
@@ -80,7 +80,7 @@ function Users() {
       const token = localStorage.getItem("token");
 
       const response = await fetch(
-        `http://localhost:5000/api/users/${user._id}/role`,
+        `https://airbnb-capstone-server.onrender.com/${user._id}/role`,
         {
           method: "PATCH",
           headers: {
@@ -131,7 +131,7 @@ function Users() {
       const token = localStorage.getItem("token");
 
       const response = await fetch(
-        `http://localhost:5000/api/users/${user._id}`,
+        `https://airbnb-capstone-server.onrender.com/${user._id}`,
         {
           method: "DELETE",
           headers: {
