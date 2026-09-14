@@ -24,7 +24,7 @@ function Reservations() {
       }
 
       const response = await fetch(
-        "http://localhost:5000/api/reservations",
+        "https://airbnb-capstone-server.onrender.com/",
         {
           method: "GET",
           headers: {
@@ -83,7 +83,7 @@ function Reservations() {
       }
 
       const response = await fetch(
-        `http://localhost:5000/api/reservations/${reservationId}/status`,
+        `https://airbnb-capstone-server.onrender.com/${reservationId}/status`,
         {
           method: "PATCH",
           headers: {
@@ -151,7 +151,7 @@ function Reservations() {
       }
 
       const response = await fetch(
-        `http://localhost:5000/api/reservations/${reservationId}`,
+        `https://airbnb-capstone-server.onrender.com//${reservationId}`,
         {
           method: "DELETE",
           headers: {
