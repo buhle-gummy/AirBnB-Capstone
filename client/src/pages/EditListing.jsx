@@ -26,7 +26,7 @@ function EditListing() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   useEffect(() => {
-    fetch(`http://localhost:5000/api/accommodations/${id}`)
+    fetch(`https://airbnb-capstone-server.onrender.com/${id}`)
       .then(async (r) => {
         const d = await r.json();
         if (!r.ok) throw new Error(d.message || "Failed to load listing");
@@ -65,7 +65,7 @@ function EditListing() {
     setError("");
     try {
       const response = await fetch(
-        `http://localhost:5000/api/accommodations/${id}`,
+        `https://airbnb-capstone-server.onrender.com/${id}`,
         {
           method: "PUT",
           headers: {
