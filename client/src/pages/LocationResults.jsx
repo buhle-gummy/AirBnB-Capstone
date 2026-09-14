@@ -7,7 +7,7 @@ function LocationResults() {
   const [stays, setStays] = useState([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    fetch("http://localhost:5000/api/accommodations")
+    fetch("https://airbnb-capstone-server.onrender.com/")
       .then((r) => r.json())
       .then((d) =>
         setStays(
