@@ -216,24 +216,7 @@ function CustomerHome() {
   }, [theme]);
 
   useEffect(() => {
-    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const onMotion = () => setReduceMotion(motion.matches);
-    const onScroll = () => setHeaderSolid(window.scrollY > 28);
-    onMotion();
-    onScroll();
-    motion.addEventListener("change", onMotion);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      motion.removeEventListener("change", onMotion);
-      window.removeEventListener("scroll", onScroll);
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    setLoadingListings(true);
-    setListingError("");
-    fetch(`${API_URL}/api/accommodations`)
+    fetch("http://localhost:5000/api/accommodations")
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok)

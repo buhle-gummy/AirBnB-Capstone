@@ -26,7 +26,7 @@ function Reservations() {
       }
 
       const response = await fetch(
-        `${API_URL}/api/reservations`,
+        "http://localhost:5000/api/reservations",
         {
           method: "GET",
           headers: {
@@ -83,7 +83,7 @@ function Reservations() {
       }
 
       const response = await fetch(
-        `${API_URL}/api/reservations/${reservationId}/status`,
+        `http://localhost:5000/api/reservations/${reservationId}/status`,
         {
           method: "PATCH",
           headers: {
@@ -145,7 +145,7 @@ function Reservations() {
       }
 
       const response = await fetch(
-        `${API_URL}/api/reservations/${reservationId}`,
+        `http://localhost:5000/api/reservations/${reservationId}`,
         {
           method: "DELETE",
           headers: {

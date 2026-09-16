@@ -30,6 +30,7 @@ function EditListing() {
   const [error, setError] = useState("");
   useEffect(() => {
     fetch(`${API_URL}/api/accommodations/${id}`)
+
       .then(async (r) => {
         const d = await r.json();
         if (!r.ok) throw new Error(d.message || "Failed to load listing");

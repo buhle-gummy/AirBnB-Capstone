@@ -16,8 +16,7 @@ function Listings() {
   const loadListings = async () => {
     try {
       setLoading(true);
-      setError("");
-      const response = await fetch(`${API_URL}/api/accommodations`);
+      const response = await fetch("http://localhost:5000/api/accommodations");
       const data = await response.json();
       if (!response.ok)
         throw new Error(data.message || "Could not load listings");

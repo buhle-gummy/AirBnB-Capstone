@@ -78,7 +78,7 @@ function CreateReservation() {
     }
     try {
       setSubmitting(true);
-      const r = await fetch(`${API_URL}/api/reservations`, {
+      const r = await fetch("http://localhost:5000/api/reservations", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

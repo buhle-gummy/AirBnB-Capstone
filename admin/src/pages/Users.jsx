@@ -26,7 +26,7 @@ function Users() {
       }
 
       const response = await fetch(
-        `${API_URL}/api/users`,
+        "http://localhost:5000/api/users",
         {
           method: "GET",
           headers: {
@@ -81,7 +81,7 @@ function Users() {
       const token = localStorage.getItem("token");
 
       const response = await fetch(
-        `${API_URL}/api/users/${user._id}/role`,
+        `http://localhost:5000/api/users/${user._id}/role`,
         {
           method: "PATCH",
           headers: {
@@ -132,7 +132,7 @@ function Users() {
       const token = localStorage.getItem("token");
 
       const response = await fetch(
-        `${API_URL}/api/users/${user._id}`,
+        `http://localhost:5000/api/users/${user._id}`,
         {
           method: "DELETE",
           headers: {
