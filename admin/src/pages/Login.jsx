@@ -28,7 +28,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const response = await apiFetch("/api/users/login", {
+      const response = await apiFetch("/users/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

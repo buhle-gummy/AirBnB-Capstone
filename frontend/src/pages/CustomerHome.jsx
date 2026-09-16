@@ -4,6 +4,7 @@ import "./Customer.css";
 import AirbnbMark from "../components/AirbnbMark";
 
 import { API_URL } from "../config/api";
+
 export const homes = [
   {
     id: "camps-bay",
@@ -156,11 +157,14 @@ const HERO_POSTER =
   "https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?auto=format&fit=crop&w=2200&q=80";
 
 function listingHaystack(home) {
-  return `${home.title || ""} ${home.location || ""} ${home.type || ""} ${home.description || ""}`.toLowerCase();
+  return `${home.title || ""} ${home.location || ""} ${home.type || ""} ${
+    home.description || ""
+  }`.toLowerCase();
 }
 
 function matchesCategory(home, category) {
   if (!category) return true;
+
   const hay = listingHaystack(home);
   const type = String(home.type || "").toLowerCase();
   const price = Number(home.price || 0);
@@ -169,18 +173,34 @@ function matchesCategory(home, category) {
   switch (category) {
     case "Beach":
       return /beach|bay|coast|ocean|shore|seaside|ballito|camps/.test(hay);
+
     case "Homes":
-      return /house|home|cottage/.test(type) || /house|home|cottage/.test(hay);
+      return (
+        /house|home|cottage/.test(type) ||
+        /house|home|cottage/.test(hay)
+      );
+
     case "City":
-      return /city|loft|apartment|johannesburg|rosebank|urban|downtown|joburg/.test(hay);
+      return /city|loft|apartment|johannesburg|rosebank|urban|downtown|joburg/.test(
+        hay
+      );
+
     case "Cabins":
       return /cabin|chalet|cottage|forest|wood/.test(hay);
+
     case "Tropical":
       return /tropical|palm|island|lagoon|villa|knysna|mauritius/.test(hay);
+
     case "Mountains":
       return /mountain|berg|drakensberg|alps|peak|franschhoek/.test(hay);
+
     case "Luxury":
-      return price >= 2000 || rating >= 4.9 || /villa|luxury|penthouse|oceanfront/.test(hay);
+      return (
+        price >= 2000 ||
+        rating >= 4.9 ||
+        /villa|luxury|penthouse|oceanfront/.test(hay)
+      );
+
     default:
       return true;
   }
@@ -197,17 +217,26 @@ function CustomerHome() {
   const [category, setCategory] = useState("");
   const [tab, setTab] = useState("Popular");
   const [guestPickerOpen, setGuestPickerOpen] = useState(false);
-  const [guests, setGuests] = useState({ adults: 0, children: 0, infants: 0 });
+
+  const [guests, setGuests] = useState({
+    adults: 0,
+    children: 0,
+    infants: 0,
+  });
+
   const [savedIds, setSavedIds] = useState(() => new Set());
   const [headerSolid, setHeaderSolid] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
+
   const [theme, setTheme] = useState(
-    () => localStorage.getItem("airbnb-theme") || "light",
+    () => localStorage.getItem("airbnb-theme") || "light"
   );
+
   const [listings, setListings] = useState([]);
   const [loadingListings, setLoadingListings] = useState(true);
   const [listingError, setListingError] = useState("");
   const [listingRetry, setListingRetry] = useState(0);
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -215,86 +244,233 @@ function CustomerHome() {
     localStorage.setItem("airbnb-theme", theme);
   }, [theme]);
 
+  /*
+   * LOAD LISTINGS FROM BACKEND
+   *
+   * IMPORTANT:
+   * We use API_URL for production or /api for local development (Vite proxy).
+   * This allows the frontend to work with both local and deployed backends.
+   */
   useEffect(() => {
-    fetch("http://localhost:5000/api/accommodations")
-      .then(async (response) => {
+    let active = true;
+
+    const loadListings = async () => {
+      try {
+        setLoadingListings(true);
+        setListingError("");
+
+        const baseUrl = API_URL || "/api";
+
+        const response = await fetch(
+          `${baseUrl}/accommodations`
+        );
+
         const data = await response.json();
-        if (!response.ok)
-          throw new Error(data.message || "Unable to load stays");
-        if (active) setListings(data.accommodations || []);
-      })
-      .catch((error) => active && setListingError("Unable to load listings. Please try again."))
-      .finally(() => active && setLoadingListings(false));
-    return () => { active = false; };
+
+        if (!response.ok) {
+          throw new Error(
+            data.message || "Unable to load stays"
+          );
+        }
+
+        if (active) {
+          setListings(data.accommodations || []);
+        }
+      } catch (error) {
+        console.error("Failed to load listings:", error);
+
+        if (active) {
+          setListings([]);
+          setListingError(
+            "Unable to load listings. Please try again."
+          );
+        }
+      } finally {
+        if (active) {
+          setLoadingListings(false);
+        }
+      }
+    };
+
+    loadListings();
+
+    return () => {
+      active = false;
+    };
   }, [listingRetry]);
+
+  /*
+   * HEADER SCROLL EFFECT
+   */
+  useEffect(() => {
+    const handleScroll = () => {
+      setHeaderSolid(window.scrollY > 40);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+
+    handleScroll();
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
+
+  /*
+   * REDUCE MOTION ACCESSIBILITY
+   */
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    );
+
+    const updateMotion = () => {
+      setReduceMotion(mediaQuery.matches);
+    };
+
+    updateMotion();
+
+    mediaQuery.addEventListener("change", updateMotion);
+
+    return () => {
+      mediaQuery.removeEventListener("change", updateMotion);
+    };
+  }, []);
 
   const filteredHomes = useMemo(
     () =>
       listings.filter((home) => {
+        const searchText = `${home.title || ""} ${
+          home.location || ""
+        }`.toLowerCase();
+
         const matchesQuery =
           !query ||
-          `${home.title} ${home.location}`
-            .toLowerCase()
-            .includes(query.toLowerCase());
-        return matchesQuery && matchesCategory(home, category);
+          searchText.includes(query.toLowerCase());
+
+        return (
+          matchesQuery &&
+          matchesCategory(home, category)
+        );
       }),
-    [listings, query, category],
+    [listings, query, category]
   );
 
   const toggleSaved = (id) => {
     setSavedIds((current) => {
       const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+
       return next;
     });
   };
 
   const selectCategory = (name) => {
-    setCategory((current) => (current === name ? "" : name));
-    document.getElementById("homes")?.scrollIntoView({ behavior: "smooth" });
+    setCategory((current) =>
+      current === name ? "" : name
+    );
+
+    document
+      .getElementById("homes")
+      ?.scrollIntoView({
+        behavior: "smooth",
+      });
   };
 
-  const totalGuests = guests.adults + guests.children;
-  const guestLabel = totalGuests || guests.infants
-    ? `${totalGuests} guest${totalGuests === 1 ? "" : "s"}${guests.infants ? `, ${guests.infants} infant${guests.infants === 1 ? "" : "s"}` : ""}`
-    : "Add guests";
+  const totalGuests =
+    guests.adults + guests.children;
+
+  const guestLabel =
+    totalGuests || guests.infants
+      ? `${totalGuests} guest${
+          totalGuests === 1 ? "" : "s"
+        }${
+          guests.infants
+            ? `, ${guests.infants} infant${
+                guests.infants === 1 ? "" : "s"
+              }`
+            : ""
+        }`
+      : "Add guests";
 
   const updateGuests = (type, amount) => {
     setGuests((current) => ({
       ...current,
-      [type]: Math.max(0, current[type] + amount),
+      [type]: Math.max(
+        0,
+        current[type] + amount
+      ),
     }));
   };
 
   return (
     <div className="stay-app">
-      <header className={`stay-header ${headerSolid ? "is-scrolled" : "is-over-hero"}`}>
+      <header
+        className={`stay-header ${
+          headerSolid
+            ? "is-scrolled"
+            : "is-over-hero"
+        }`}
+      >
         <Link to="/" className="stay-brand">
-          <span className="brand-mark"><AirbnbMark /></span>
+          <span className="brand-mark">
+            <AirbnbMark />
+          </span>
           <span>Airbnb</span>
         </Link>
+
         <nav className="stay-nav">
           <a href="#homes">Stays</a>
           <a href="#inspiration">Explore</a>
           <a href="#hosting">Become a host</a>
         </nav>
+
         <div className="stay-actions">
-          <Link to="/admin/login" className="admin-link">
+          <Link
+            to="/admin/login"
+            className="admin-link"
+          >
             Manage stays
           </Link>
+
           <button
             className="theme-toggle"
             type="button"
-            onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}
-            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            onClick={() =>
+              setTheme((current) =>
+                current === "dark"
+                  ? "light"
+                  : "dark"
+              )
+            }
+            aria-label={`Switch to ${
+              theme === "dark"
+                ? "light"
+                : "dark"
+            } mode`}
+            title={`Switch to ${
+              theme === "dark"
+                ? "light"
+                : "dark"
+            } mode`}
           >
-            <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
+            <span aria-hidden="true">
+              {theme === "dark" ? "☀" : "☾"}
+            </span>
           </button>
-          <button className="icon-button" aria-label="Open menu">
+
+          <button
+            className="icon-button"
+            aria-label="Open menu"
+          >
             ☰
           </button>
+
           <button
             className="avatar-button"
             aria-label="Profile"
@@ -307,7 +483,10 @@ function CustomerHome() {
 
       <main>
         <section className="stay-hero">
-          <div className="hero-media" aria-hidden="true">
+          <div
+            className="hero-media"
+            aria-hidden="true"
+          >
             {!reduceMotion && (
               <video
                 className="hero-video"
@@ -323,28 +502,51 @@ function CustomerHome() {
                 />
               </video>
             )}
+
             <div className="hero-fallback" />
             <div className="hero-overlay" />
+
             <span className="hero-orb hero-orb-a" />
             <span className="hero-orb hero-orb-b" />
             <span className="hero-orb hero-orb-c" />
           </div>
-          <div className="hero-orbit hero-orbit-one" aria-hidden="true" />
-          <div className="hero-orbit hero-orbit-two" aria-hidden="true" />
-          <div className="hero-stamp" aria-hidden="true">
-            <span>✦</span> curated stays<br />for curious travellers
+
+          <div
+            className="hero-orbit hero-orbit-one"
+            aria-hidden="true"
+          />
+
+          <div
+            className="hero-orbit hero-orbit-two"
+            aria-hidden="true"
+          />
+
+          <div
+            className="hero-stamp"
+            aria-hidden="true"
+          >
+            <span>✦</span> curated stays
+            <br />
+            for curious travellers
           </div>
+
           <div className="hero-copy">
-            <p className="eyebrow">YOUR NEXT ESCAPE STARTS HERE</p>
+            <p className="eyebrow">
+              YOUR NEXT ESCAPE STARTS HERE
+            </p>
+
             <h1>
               Find a place
               <br />
               <em>worth staying for.</em>
             </h1>
+
             <p className="hero-subtitle">
-              Handpicked homes, thoughtful hosts, and stays that feel like a
-              story — from coastal villas to mountain hideaways.
+              Handpicked homes, thoughtful hosts,
+              and stays that feel like a story — from
+              coastal villas to mountain hideaways.
             </p>
+
             <div className="hero-cta-row">
               <button
                 type="button"
@@ -352,316 +554,631 @@ function CustomerHome() {
                 onClick={() =>
                   document
                     .getElementById("homes")
-                    ?.scrollIntoView({ behavior: "smooth" })
+                    ?.scrollIntoView({
+                      behavior: "smooth",
+                    })
                 }
               >
                 Explore stays
               </button>
+
               <button
                 type="button"
                 className="hero-cta ghost"
                 onClick={() =>
                   document
                     .getElementById("inspiration")
-                    ?.scrollIntoView({ behavior: "smooth" })
+                    ?.scrollIntoView({
+                      behavior: "smooth",
+                    })
                 }
               >
                 Browse destinations
               </button>
             </div>
           </div>
-          <div className="hero-search" role="search">
+
+          <div
+            className="hero-search"
+            role="search"
+          >
             <label className="search-pill-field search-pill-location">
-              <span className="search-pill-icon" aria-hidden="true">⌂</span>
+              <span
+                className="search-pill-icon"
+                aria-hidden="true"
+              >
+                ⌂
+              </span>
+
               <span className="search-pill-copy">
-                <span className="search-pill-label">Where</span>
+                <span className="search-pill-label">
+                  Where
+                </span>
+
                 <input
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={(e) =>
+                    setQuery(e.target.value)
+                  }
                   placeholder="Search destinations"
                   aria-label="Search destinations"
                 />
               </span>
             </label>
+
             <label className="search-pill-field">
               <span className="search-pill-copy">
-                <span className="search-pill-label">When</span>
-                <input type="text" placeholder="Any week" aria-label="When" />
+                <span className="search-pill-label">
+                  When
+                </span>
+
+                <input
+                  type="text"
+                  placeholder="Any week"
+                  aria-label="When"
+                />
               </span>
             </label>
+
             <div className="search-pill-field guest-picker-field">
               <button
                 className="guest-picker-trigger"
                 type="button"
-                aria-expanded={guestPickerOpen}
+                aria-expanded={
+                  guestPickerOpen
+                }
                 aria-haspopup="dialog"
-                onClick={() => setGuestPickerOpen((open) => !open)}
+                onClick={() =>
+                  setGuestPickerOpen(
+                    (open) => !open
+                  )
+                }
               >
                 <span className="search-pill-copy">
-                  <span className="search-pill-label">Who</span>
-                  <span className="guest-picker-value">{guestLabel}</span>
+                  <span className="search-pill-label">
+                    Who
+                  </span>
+
+                  <span className="guest-picker-value">
+                    {guestLabel}
+                  </span>
                 </span>
               </button>
+
               {guestPickerOpen && (
-                <div className="guest-picker" role="dialog" aria-label="Choose guests">
+                <div
+                  className="guest-picker"
+                  role="dialog"
+                  aria-label="Choose guests"
+                >
                   {[
-                    ["adults", "Adults", "Ages 13 or above"],
-                    ["children", "Children", "Ages 2–12"],
-                    ["infants", "Infants", "Under 2"],
-                  ].map(([type, title, detail]) => (
-                    <div className="guest-picker-row" key={type}>
-                      <span>
-                        <strong>{title}</strong>
-                        <small>{detail}</small>
-                      </span>
-                      <span className="guest-picker-controls">
-                        <button
-                          type="button"
-                          aria-label={`Remove ${title.toLowerCase()}`}
-                          disabled={guests[type] === 0}
-                          onClick={() => updateGuests(type, -1)}
-                        >−</button>
-                        <b>{guests[type]}</b>
-                        <button
-                          type="button"
-                          aria-label={`Add ${title.toLowerCase()}`}
-                          onClick={() => updateGuests(type, 1)}
-                        >+</button>
-                      </span>
-                    </div>
-                  ))}
+                    [
+                      "adults",
+                      "Adults",
+                      "Ages 13 or above",
+                    ],
+                    [
+                      "children",
+                      "Children",
+                      "Ages 2–12",
+                    ],
+                    [
+                      "infants",
+                      "Infants",
+                      "Under 2",
+                    ],
+                  ].map(
+                    ([
+                      type,
+                      title,
+                      detail,
+                    ]) => (
+                      <div
+                        className="guest-picker-row"
+                        key={type}
+                      >
+                        <span>
+                          <strong>
+                            {title}
+                          </strong>
+
+                          <small>
+                            {detail}
+                          </small>
+                        </span>
+
+                        <span className="guest-picker-controls">
+                          <button
+                            type="button"
+                            aria-label={`Remove ${title.toLowerCase()}`}
+                            disabled={
+                              guests[type] ===
+                              0
+                            }
+                            onClick={() =>
+                              updateGuests(
+                                type,
+                                -1
+                              )
+                            }
+                          >
+                            −
+                          </button>
+
+                          <b>
+                            {guests[type]}
+                          </b>
+
+                          <button
+                            type="button"
+                            aria-label={`Add ${title.toLowerCase()}`}
+                            onClick={() =>
+                              updateGuests(
+                                type,
+                                1
+                              )
+                            }
+                          >
+                            +
+                          </button>
+                        </span>
+                      </div>
+                    )
+                  )}
                 </div>
               )}
             </div>
+
             <button
               onClick={() => {
                 setGuestPickerOpen(false);
+
                 document
                   .getElementById("homes")
-                  ?.scrollIntoView({ behavior: "smooth" });
+                  ?.scrollIntoView({
+                    behavior: "smooth",
+                  });
               }}
               className="search-submit"
             >
-              <span aria-hidden="true">⌕</span>
-              <span className="search-submit-label">Search</span>
+              <span aria-hidden="true">
+                ⌕
+              </span>
+
+              <span className="search-submit-label">
+                Search
+              </span>
             </button>
           </div>
         </section>
 
-        <section className="section-block category-section" id="inspiration">
+        <section
+          className="section-block category-section"
+          id="inspiration"
+        >
           <div className="section-heading">
             <div>
-              <p className="eyebrow">EXPLORE CATEGORIES</p>
-              <h2>Find your kind of stay</h2>
+              <p className="eyebrow">
+                EXPLORE CATEGORIES
+              </p>
+
+              <h2>
+                Find your kind of stay
+              </h2>
             </div>
+
             {category ? (
               <button
                 type="button"
                 className="clear-category"
-                onClick={() => setCategory("")}
+                onClick={() =>
+                  setCategory("")
+                }
               >
                 Show all stays
               </button>
             ) : (
-              <a href="#homes" className="text-link">
+              <a
+                href="#homes"
+                className="text-link"
+              >
                 Explore all <span>→</span>
               </a>
             )}
           </div>
-          <div className="category-rail" role="list">
-            {exploreCategories.map((item) => (
-              <button
-                key={item.name}
-                type="button"
-                className={`category-card ${category === item.name ? "selected" : ""}`}
-                onClick={() => selectCategory(item.name)}
-                aria-pressed={category === item.name}
-              >
-                <span
-                  className="category-card-media"
-                  style={{ backgroundImage: `url(${item.image})` }}
+
+          <div
+            className="category-rail"
+            role="list"
+          >
+            {exploreCategories.map(
+              (item) => (
+                <button
+                  key={item.name}
+                  type="button"
+                  className={`category-card ${
+                    category === item.name
+                      ? "selected"
+                      : ""
+                  }`}
+                  onClick={() =>
+                    selectCategory(
+                      item.name
+                    )
+                  }
+                  aria-pressed={
+                    category === item.name
+                  }
                 >
-                  <span className="category-icon" aria-hidden="true">
-                    {item.icon}
+                  <span
+                    className="category-card-media"
+                    style={{
+                      backgroundImage: `url(${item.image})`,
+                    }}
+                  >
+                    <span
+                      className="category-icon"
+                      aria-hidden="true"
+                    >
+                      {item.icon}
+                    </span>
                   </span>
-                </span>
-                <strong>{item.name}</strong>
-                <small>{item.detail}</small>
-              </button>
-            ))}
+
+                  <strong>
+                    {item.name}
+                  </strong>
+
+                  <small>
+                    {item.detail}
+                  </small>
+                </button>
+              )
+            )}
           </div>
         </section>
 
         <section className="section-block destinations-section">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">GO SOMEWHERE NEW</p>
-              <h2>Inspiration for your next trip</h2>
+              <p className="eyebrow">
+                GO SOMEWHERE NEW
+              </p>
+
+              <h2>
+                Inspiration for your next trip
+              </h2>
             </div>
-            <a href="#homes" className="text-link">
+
+            <a
+              href="#homes"
+              className="text-link"
+            >
               Explore all <span>→</span>
             </a>
           </div>
+
           <div className="inspiration-grid">
-            {inspirations.map((place) => (
-              <button
-                className="inspiration-card"
-                key={place.name}
-                onClick={() => {
-                  setQuery(place.name);
-                  document.getElementById("homes")?.scrollIntoView({ behavior: "smooth" });
-                }}
-              >
-                <img src={place.image} alt={place.name} />
-                <span>
-                  <strong>{place.name}</strong>
-                  <small>{place.detail}</small>
-                </span>
-              </button>
-            ))}
+            {inspirations.map(
+              (place) => (
+                <button
+                  className="inspiration-card"
+                  key={place.name}
+                  onClick={() => {
+                    setQuery(place.name);
+
+                    document
+                      .getElementById(
+                        "homes"
+                      )
+                      ?.scrollIntoView({
+                        behavior: "smooth",
+                      });
+                  }}
+                >
+                  <img
+                    src={place.image}
+                    alt={place.name}
+                  />
+
+                  <span>
+                    <strong>
+                      {place.name}
+                    </strong>
+
+                    <small>
+                      {place.detail}
+                    </small>
+                  </span>
+                </button>
+              )
+            )}
           </div>
         </section>
 
-        <section className="section-block homes-section" id="homes">
+        <section
+          className="section-block homes-section"
+          id="homes"
+        >
           <div className="section-heading">
             <div>
-              <p className="eyebrow">STAY A WHILE</p>
-              <h2>{category ? `${category} stays` : "Homes guests love"}</h2>
+              <p className="eyebrow">
+                STAY A WHILE
+              </p>
+
+              <h2>
+                {category
+                  ? `${category} stays`
+                  : "Homes guests love"}
+              </h2>
             </div>
           </div>
+
           <div className="home-grid">
             {loadingListings && (
               <div className="empty-result">
-                Finding beautiful stays for you...
+                Finding beautiful stays
+                for you...
               </div>
             )}
+
             {listingError && (
-              <div className="empty-result" role="alert">
+              <div
+                className="empty-result"
+                role="alert"
+              >
                 <p>{listingError}</p>
-                <button type="button" className="results-reset" onClick={() => setListingRetry((value) => value + 1)}>Try again</button>
+
+                <button
+                  type="button"
+                  className="results-reset"
+                  onClick={() =>
+                    setListingRetry(
+                      (value) =>
+                        value + 1
+                    )
+                  }
+                >
+                  Try again
+                </button>
               </div>
             )}
-            {filteredHomes.map((home, index) => (
-              <article
-                className="home-card reveal-card"
-                key={home._id}
-                onClick={() => navigate(`/stays/${home._id}`)}
-              >
-                <div className="home-image">
-                  <img
-                    src={home.images?.[0] || getPropertyImage(index)}
-                    alt={home.title}
-                    loading="lazy"
-                    onError={(event) => {
-                      event.currentTarget.onerror = null;
-                      event.currentTarget.src = getPropertyImage(index);
-                    }}
-                  />
-                  <button
-                    className={`heart ${savedIds.has(home._id) ? "is-saved" : ""}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleSaved(home._id);
-                    }}
-                    aria-label={savedIds.has(home._id) ? "Remove from saved" : "Save home"}
-                    aria-pressed={savedIds.has(home._id)}
+
+            {!loadingListings &&
+              !listingError &&
+              filteredHomes.map(
+                (home, index) => (
+                  <article
+                    className="home-card reveal-card"
+                    key={home._id}
+                    onClick={() =>
+                      navigate(
+                        `/stays/${home._id}`
+                      )
+                    }
                   >
-                    {savedIds.has(home._id) ? "♥" : "♡"}
-                  </button>
-                  {(Number(home.rating) >= 4.85 || index < 2) && (
-                    <span className="card-badge">Guest favourite</span>
-                  )}
-                </div>
-                <div className="home-info">
-                  <p className="home-location">{home.location}</p>
-                  <div className="home-title-row">
-                    <h3>{home.title}</h3>
-                    <span className="home-rating">★ {home.rating || "New"}</span>
-                  </div>
-                  <p className="home-meta">
-                    {home.type} · {home.bedrooms} bedrooms · {home.guests}{" "}
-                    guests
-                  </p>
-                  <div className="home-footer">
-                    <strong>
-                      R{Number(home.price).toLocaleString("en-ZA")}{" "}
-                      <small>night</small>
-                    </strong>
-                    <button
-                      className="book-now"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/stays/${home._id}`);
-                      }}
-                    >
-                      Book now <span>→</span>
-                    </button>
-                  </div>
-                </div>
-              </article>
-            ))}
+                    <div className="home-image">
+                      <img
+                        src={
+                          home.images?.[0] ||
+                          getPropertyImage(
+                            index
+                          )
+                        }
+                        alt={home.title}
+                        loading="lazy"
+                        onError={(
+                          event
+                        ) => {
+                          event.currentTarget.onerror =
+                            null;
+
+                          event.currentTarget.src =
+                            getPropertyImage(
+                              index
+                            );
+                        }}
+                      />
+
+                      <button
+                        className={`heart ${
+                          savedIds.has(
+                            home._id
+                          )
+                            ? "is-saved"
+                            : ""
+                        }`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSaved(
+                            home._id
+                          );
+                        }}
+                        aria-label={
+                          savedIds.has(
+                            home._id
+                          )
+                            ? "Remove from saved"
+                            : "Save home"
+                        }
+                        aria-pressed={savedIds.has(
+                          home._id
+                        )}
+                      >
+                        {savedIds.has(
+                          home._id
+                        )
+                          ? "♥"
+                          : "♡"}
+                      </button>
+
+                      {(Number(
+                        home.rating
+                      ) >= 4.85 ||
+                        index < 2) && (
+                        <span className="card-badge">
+                          Guest favourite
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="home-info">
+                      <p className="home-location">
+                        {home.location}
+                      </p>
+
+                      <div className="home-title-row">
+                        <h3>
+                          {home.title}
+                        </h3>
+
+                        <span className="home-rating">
+                          ★{" "}
+                          {home.rating ||
+                            "New"}
+                        </span>
+                      </div>
+
+                      <p className="home-meta">
+                        {home.type} ·{" "}
+                        {home.bedrooms}{" "}
+                        bedrooms ·{" "}
+                        {home.guests} guests
+                      </p>
+
+                      <div className="home-footer">
+                        <strong>
+                          R
+                          {Number(
+                            home.price || 0
+                          ).toLocaleString(
+                            "en-ZA"
+                          )}{" "}
+                          <small>
+                            night
+                          </small>
+                        </strong>
+
+                        <button
+                          className="book-now"
+                          onClick={(e) => {
+                            e.stopPropagation();
+
+                            navigate(
+                              `/stays/${home._id}`
+                            );
+                          }}
+                        >
+                          Book now{" "}
+                          <span>→</span>
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                )
+              )}
           </div>
-          {!loadingListings && !listingError && filteredHomes.length === 0 && (
-            <div className="empty-result">
-              No homes matched that search. Try another destination.
-            </div>
-          )}
+
+          {!loadingListings &&
+            !listingError &&
+            filteredHomes.length === 0 && (
+              <div className="empty-result">
+                No homes matched that
+                search. Try another
+                destination.
+              </div>
+            )}
         </section>
 
         <section className="experience-section section-block">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">DISCOVER MORE</p>
-              <h2>Make your trip memorable</h2>
+              <p className="eyebrow">
+                DISCOVER MORE
+              </p>
+
+              <h2>
+                Make your trip memorable
+              </h2>
             </div>
           </div>
+
           <div className="experience-grid">
             <article>
               <span>✦</span>
+
               <h3>Experiences</h3>
+
               <p>
-                Find local activities, food, and stories curated for curious
-                travellers.
+                Find local activities,
+                food, and stories curated
+                for curious travellers.
               </p>
+
               <button
                 onClick={() =>
                   document
-                    .getElementById("homes")
-                    ?.scrollIntoView({ behavior: "smooth" })
+                    .getElementById(
+                      "homes"
+                    )
+                    ?.scrollIntoView({
+                      behavior:
+                        "smooth",
+                    })
                 }
               >
                 Explore experiences →
               </button>
             </article>
+
             <article>
               <span>⌂</span>
+
               <h3>Things to do</h3>
+
               <p>
-                Slow mornings, city walks, and unforgettable moments close to
-                your stay.
+                Slow mornings, city
+                walks, and unforgettable
+                moments close to your
+                stay.
               </p>
+
               <button
                 onClick={() =>
                   document
-                    .getElementById("inspiration")
-                    ?.scrollIntoView({ behavior: "smooth" })
+                    .getElementById(
+                      "inspiration"
+                    )
+                    ?.scrollIntoView({
+                      behavior:
+                        "smooth",
+                    })
                 }
               >
                 Find inspiration →
               </button>
             </article>
+
             <article>
               <span>♡</span>
+
               <h3>At home</h3>
+
               <p>
-                Bring the feeling of a beautiful getaway into your everyday
-                space.
+                Bring the feeling of a
+                beautiful getaway into
+                your everyday space.
               </p>
+
               <button
                 onClick={() =>
                   document
-                    .getElementById("hosting")
-                    ?.scrollIntoView({ behavior: "smooth" })
+                    .getElementById(
+                      "hosting"
+                    )
+                    ?.scrollIntoView({
+                      behavior:
+                        "smooth",
+                    })
                 }
               >
                 Discover more →
@@ -669,52 +1186,88 @@ function CustomerHome() {
             </article>
           </div>
         </section>
+
         <section className="gift-section">
           <div>
-            <p className="eyebrow">GIVE THE GIFT OF GETAWAY</p>
+            <p className="eyebrow">
+              GIVE THE GIFT OF GETAWAY
+            </p>
+
             <h2>
               Send someone
               <br />
-              <em>somewhere special.</em>
+              <em>
+                somewhere special.
+              </em>
             </h2>
-            <p>Share a little more soul with an Airbnb gift card.</p>
+
+            <p>
+              Share a little more soul
+              with an Airbnb gift card.
+            </p>
+
             <button
               onClick={() =>
                 document
-                  .getElementById("homes")
-                  ?.scrollIntoView({ behavior: "smooth" })
+                  .getElementById(
+                    "homes"
+                  )
+                  ?.scrollIntoView({
+                    behavior: "smooth",
+                  })
               }
             >
               Explore stays →
             </button>
           </div>
+
           <img
             src="https://images.unsplash.com/photo-1519225421980-715cb0215aed?auto=format&fit=crop&w=1000&q=85"
             alt="A thoughtful travel gift"
           />
         </section>
-        <section className="feature-banner" id="hosting">
+
+        <section
+          className="feature-banner"
+          id="hosting"
+        >
           <div>
-            <p className="eyebrow">A MORE MEANINGFUL WAY TO TRAVEL</p>
+            <p className="eyebrow">
+              A MORE MEANINGFUL WAY TO
+              TRAVEL
+            </p>
+
             <h2>
               Make room for
               <br />
-              <em>more connection.</em>
+              <em>
+                more connection.
+              </em>
             </h2>
+
             <p>
-              From a quiet weekend away to a month-long reset, find spaces
-              designed for the way you want to live.
+              From a quiet weekend away
+              to a month-long reset, find
+              spaces designed for the way
+              you want to live.
             </p>
+
             <button
               onClick={() =>
                 document
-                  .getElementById("homes")
-                  ?.scrollIntoView({ behavior: "smooth" })
+                  .getElementById(
+                    "homes"
+                  )
+                  ?.scrollIntoView({
+                    behavior: "smooth",
+                  })
               }
             >
-              Discover stays <span>→</span>
+              Discover stays{" "}
+              <span>→</span>
             </button>
           </div>
+
           <img
             src="https://images.unsplash.com/photo-1601918774946-25832a4be0d6?auto=format&fit=crop&w=1200&q=85"
             alt="Warm, welcoming living room"
@@ -724,50 +1277,86 @@ function CustomerHome() {
         <section className="section-block getaway-section">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">PLAN AHEAD</p>
-              <h2>Getaways for every season</h2>
+              <p className="eyebrow">
+                PLAN AHEAD
+              </p>
+
+              <h2>
+                Getaways for every season
+              </h2>
             </div>
+
             <div className="tab-list">
-              {["Popular", "Beach", "Mountains", "City breaks"].map((item) => (
+              {[
+                "Popular",
+                "Beach",
+                "Mountains",
+                "City breaks",
+              ].map((item) => (
                 <button
-                  className={tab === item ? "active" : ""}
+                  className={
+                    tab === item
+                      ? "active"
+                      : ""
+                  }
                   key={item}
-                  onClick={() => setTab(item)}
+                  onClick={() =>
+                    setTab(item)
+                  }
                 >
                   {item}
                 </button>
               ))}
             </div>
           </div>
+
           <div className="getaway-content">
             <div>
               <span className="getaway-number">
                 0
-                {["Popular", "Beach", "Mountains", "City breaks"].indexOf(tab) +
-                  1}
+                {[
+                  "Popular",
+                  "Beach",
+                  "Mountains",
+                  "City breaks",
+                ].indexOf(tab) + 1}
               </span>
+
               <h3>
                 {tab === "Popular"
                   ? "Small moments, big memories"
                   : `${tab} escapes made easy`}
               </h3>
+
               <p>
-                Discover stays that make it easy to slow down, switch off, and
-                see somewhere through a new lens.
+                Discover stays that make
+                it easy to slow down, switch
+                off, and see somewhere
+                through a new lens.
               </p>
-              <a href="#homes" className="text-link">
-                Find your stay <span>→</span>
+
+              <a
+                href="#homes"
+                className="text-link"
+              >
+                Find your stay{" "}
+                <span>→</span>
               </a>
             </div>
+
             <img
               src={
                 tab === "Mountains"
-                  ? inspirations[3].image
+                  ? inspirations[3]
+                      .image
                   : tab === "Beach"
-                    ? inspirations[0].image
-                    : tab === "City breaks"
-                      ? inspirations[2].image
-                      : inspirations[1].image
+                  ? inspirations[0]
+                      .image
+                  : tab === "City breaks"
+                  ? inspirations[2]
+                      .image
+                  : inspirations[1]
+                      .image
               }
               alt={`${tab} getaway`}
             />
@@ -777,35 +1366,81 @@ function CustomerHome() {
 
       <footer className="stay-footer">
         <div className="footer-top">
-          <Link to="/" className="stay-brand">
-            <span className="brand-mark"><AirbnbMark /></span>
+          <Link
+            to="/"
+            className="stay-brand"
+          >
+            <span className="brand-mark">
+              <AirbnbMark />
+            </span>
+
             <span>Airbnb</span>
           </Link>
-          <p>Stays with a little more soul.</p>
+
+          <p>
+            Stays with a little more
+            soul.
+          </p>
         </div>
+
         <div className="footer-links">
           <div>
             <strong>Airbnb</strong>
-            <a href="#inspiration">About us</a>
-            <a href="#hosting">Careers</a>
-            <a href="/admin/login">Manage listings</a>
+
+            <a href="#inspiration">
+              About us
+            </a>
+
+            <a href="#hosting">
+              Careers
+            </a>
+
+            <a href="/admin/login">
+              Manage listings
+            </a>
           </div>
+
           <div>
             <strong>Support</strong>
-            <a href="#homes">Help centre</a>
-            <a href="#homes">Safety information</a>
-            <a href="#homes">Cancellation options</a>
+
+            <a href="#homes">
+              Help centre
+            </a>
+
+            <a href="#homes">
+              Safety information
+            </a>
+
+            <a href="#homes">
+              Cancellation options
+            </a>
           </div>
+
           <div>
             <strong>Hosting</strong>
-            <a href="#hosting">List your home</a>
-            <a href="#hosting">Host resources</a>
-            <a href="#hosting">Community</a>
+
+            <a href="#hosting">
+              List your home
+            </a>
+
+            <a href="#hosting">
+              Host resources
+            </a>
+
+            <a href="#hosting">
+              Community
+            </a>
           </div>
         </div>
+
         <div className="footer-bottom">
-          <span>© 2026 Airbnb, Inc.</span>
-          <span>Privacy · Terms · Sitemap</span>
+          <span>
+            © 2026 Airbnb, Inc.
+          </span>
+
+          <span>
+            Privacy · Terms · Sitemap
+          </span>
         </div>
       </footer>
     </div>

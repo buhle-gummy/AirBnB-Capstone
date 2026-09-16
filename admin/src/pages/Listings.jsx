@@ -16,7 +16,8 @@ function Listings() {
   const loadListings = async () => {
     try {
       setLoading(true);
-      const response = await fetch("http://localhost:5000/api/accommodations");
+      const baseUrl = API_URL || "/api";
+      const response = await fetch(`${baseUrl}/accommodations`);
       const data = await response.json();
       if (!response.ok)
         throw new Error(data.message || "Could not load listings");
@@ -53,8 +54,9 @@ function Listings() {
     if (!window.confirm("Are you sure you want to delete this listing?"))
       return;
     try {
+      const baseUrl = API_URL || "/api";
       const response = await fetch(
-        `${API_URL}/api/accommodations/${id}`,
+        `${baseUrl}/accommodations/${id}`,
         {
           method: "DELETE",
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },

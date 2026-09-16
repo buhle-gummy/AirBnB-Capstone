@@ -25,8 +25,9 @@ function Reservations() {
         throw new Error("You are not logged in.");
       }
 
+      const baseUrl = API_URL || "/api";
       const response = await fetch(
-        "http://localhost:5000/api/reservations",
+        `${baseUrl}/reservations`,
         {
           method: "GET",
           headers: {
@@ -82,8 +83,9 @@ function Reservations() {
         throw new Error("You are not logged in.");
       }
 
+      const baseUrl = API_URL || "/api";
       const response = await fetch(
-        `http://localhost:5000/api/reservations/${reservationId}/status`,
+        `${baseUrl}/reservations/${reservationId}/status`,
         {
           method: "PATCH",
           headers: {
@@ -144,8 +146,9 @@ function Reservations() {
         throw new Error("You are not logged in.");
       }
 
+      const baseUrl = API_URL || "/api";
       const response = await fetch(
-        `http://localhost:5000/api/reservations/${reservationId}`,
+        `${baseUrl}/reservations/${reservationId}`,
         {
           method: "DELETE",
           headers: {

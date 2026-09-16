@@ -25,7 +25,8 @@ export async function apiFetch(path, options = {}) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
+  const baseUrl = API_URL || "/api";
+  const response = await fetch(`${baseUrl}${path}`, {
     ...options,
     headers,
   });

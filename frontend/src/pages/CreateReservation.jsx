@@ -18,7 +18,8 @@ function CreateReservation() {
   const [reservation, setReservation] = useState(null);
   const token = localStorage.getItem("token");
   useEffect(() => {
-    fetch(`${API_URL}/api/accommodations/${id}`, {
+    const baseUrl = API_URL || "/api";
+    fetch(`${baseUrl}/accommodations/${id}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(async (r) => {
@@ -78,7 +79,8 @@ function CreateReservation() {
     }
     try {
       setSubmitting(true);
-      const r = await fetch("http://localhost:5000/api/reservations", {
+      const baseUrl = API_URL || "/api";
+      const r = await fetch(`${baseUrl}/reservations`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

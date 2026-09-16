@@ -22,12 +22,14 @@ function Dashboard() {
         setLoading(true);
         setError("");
 
+        const baseUrl = API_URL || "/api";
+
         // =========================
         // FETCH ACCOMMODATIONS
         // =========================
 
         const accommodationsResponse = await fetch(
-          `${API_URL}/api/accommodations`
+          `${baseUrl}/accommodations`
         );
 
         const accommodationsData =
@@ -48,7 +50,7 @@ function Dashboard() {
         }
 
         const reservationsResponse = await fetch(
-          `${API_URL}/api/reservations`,
+          `${baseUrl}/reservations`,
           {
             method: "GET",
             headers: {
@@ -68,7 +70,7 @@ function Dashboard() {
           throw new Error(reservationsData.message || "Unable to load reservations");
         }
 
-        const usersResponse = await fetch(`${API_URL}/api/users`, {
+        const usersResponse = await fetch(`${baseUrl}/users`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const usersData = await usersResponse.json();

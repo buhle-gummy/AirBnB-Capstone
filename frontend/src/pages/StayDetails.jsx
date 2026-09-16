@@ -23,7 +23,8 @@ function StayDetails() {
     let active = true;
     setLoading(true);
     setError("");
-    fetch(`http://localhost:5000/api/accommodations/${id}`)
+    const baseUrl = API_URL || "/api";
+    fetch(`${baseUrl}/accommodations/${id}`)
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || "Unable to load this stay");

@@ -29,7 +29,8 @@ function EditListing() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   useEffect(() => {
-    fetch(`${API_URL}/api/accommodations/${id}`)
+    const baseUrl = API_URL || "/api";
+    fetch(`${baseUrl}/accommodations/${id}`)
 
       .then(async (r) => {
         const d = await r.json();
@@ -70,8 +71,9 @@ function EditListing() {
     setMessage("");
     setError("");
     try {
+      const baseUrl = API_URL || "/api";
       const response = await fetch(
-        `${API_URL}/api/accommodations/${id}`,
+        `${baseUrl}/accommodations/${id}`,
         {
           method: "PUT",
           headers: {

@@ -19,7 +19,8 @@ function Register() {
     setMessage("");
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/users/register`, {
+      const baseUrl = API_URL || "/api";
+      const response = await fetch(`${baseUrl}/users/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, email: form.email.trim().toLowerCase() }),
@@ -27,7 +28,7 @@ function Register() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Registration failed");
 
-      const login = await fetch(`${API_URL}/api/users/login`, {
+      const login = await fetch(`${baseUrl}/users/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: form.email.trim().toLowerCase(), password: form.password }),

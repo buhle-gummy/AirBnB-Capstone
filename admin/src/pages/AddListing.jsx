@@ -40,7 +40,8 @@ function AddListing() {
     try {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("You are not logged in.");
-      const response = await fetch("http://localhost:5000/api/accommodations", {
+      const baseUrl = API_URL || "/api";
+      const response = await fetch(`${baseUrl}/accommodations`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

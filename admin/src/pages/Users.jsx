@@ -25,8 +25,9 @@ function Users() {
         throw new Error("You are not logged in.");
       }
 
+      const baseUrl = API_URL || "/api";
       const response = await fetch(
-        "http://localhost:5000/api/users",
+        `${baseUrl}/users`,
         {
           method: "GET",
           headers: {
@@ -80,8 +81,9 @@ function Users() {
 
       const token = localStorage.getItem("token");
 
+      const baseUrl = API_URL || "/api";
       const response = await fetch(
-        `http://localhost:5000/api/users/${user._id}/role`,
+        `${baseUrl}/users/${user._id}/role`,
         {
           method: "PATCH",
           headers: {
@@ -131,8 +133,9 @@ function Users() {
 
       const token = localStorage.getItem("token");
 
+      const baseUrl = API_URL || "/api";
       const response = await fetch(
-        `http://localhost:5000/api/users/${user._id}`,
+        `${baseUrl}/users/${user._id}`,
         {
           method: "DELETE",
           headers: {
