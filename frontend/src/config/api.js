@@ -1,1 +1,1 @@
-export const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "") || "/api";
+export const API_URL = (https://airbnb-capstone-backend-zvr2.onrender.com/);
