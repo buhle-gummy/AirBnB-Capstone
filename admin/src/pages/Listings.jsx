@@ -50,45 +50,31 @@ export default function Listings() {
   }, []);
 
   const handleDelete = async (id) => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this listing?"
+  const confirmed = window.confirm(
+    "Are you sure you want to delete this listing?"
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setDeletingId(id);
+    setError("");
+
+    await adminApi.deleteAccommodation(id);
+
+    // Remove the deleted listing immediately from the screen
+    setListings((currentListings) =>
+      currentListings.filter((listing) => listing._id !== id)
     );
+  } catch (err) {
+    console.error("Delete error:", err);
+    setError(err.message || "Failed to delete listing.");
+  } finally {
+    setDeletingId(null);
+  }
+};
 
-    if (!confirmed) return;
-
-    try {
-      setDeletingId(id);
-      setError("");
-
-      const token = localStorage.getItem("token");
-
-      const response = await fetch(
-        `http://localhost:5000/api/accommodations/${id}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      const data = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        throw new Error(
-          data?.message || "Failed to delete listing."
-        );
-      }
-
-      await loadListings();
-    } catch (err) {
-      console.error(err);
-      setError(err.message || "Failed to delete listing.");
-    } finally {
-      setDeletingId(null);
-    }
-  };
+    
 
   return (
     <div style={styles.page}>
