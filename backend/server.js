@@ -25,6 +25,7 @@ app.use(
       "http://localhost:5174",
       "http://localhost:5176",
       "https://airbnb-capstone-frontend-pwvt.onrender.com",
+      "https://airbnb-capstone-admin-hv6a.onrender.com"
     ],
     credentials: true,
   })
