@@ -1,400 +1,993 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import AirbnbMark from "../components/AirbnbMark";
+import {
+  FaArrowLeft,
+  FaUser,
+  FaUsers,
+  FaUserShield,
+  FaSyncAlt,
+  FaEnvelope,
+  FaCalendarAlt,
+  FaCheckCircle,
+  FaExclamationCircle,
+} from "react-icons/fa";
+import { adminApi } from "../services/api";
 
-import { API_URL } from "../config/api";
-function Users() {
+const AIRBNB_LOGO =
+  "https://upload.wikimedia.org/wikipedia/commons/6/69/Airbnb_Logo_B%C3%A9lo.svg";
+
+export default function Users() {
   const navigate = useNavigate();
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [actionLoading, setActionLoading] = useState("");
-  const [search, setSearch] = useState("");
 
-  const currentUser = JSON.parse(localStorage.getItem("user") || "null");
-
-  const fetchUsers = async () => {
+  const loadUsers = async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
       setError("");
 
-      const token = localStorage.getItem("token");
+      const data = await adminApi.getUsers();
 
-      if (!token) {
-        throw new Error("You are not logged in.");
-      }
+      const items = Array.isArray(data)
+        ? data
+        : data?.users || data?.data || [];
 
-      const baseUrl = API_URL || "/api";
-      const response = await fetch(
-        `${baseUrl}/users`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to load users");
-      }
-
-      setUsers(data.users || []);
+      setUsers(items);
     } catch (err) {
-      console.error("USERS ERROR:", err);
-      setError(err.message || "Unable to load users");
+      console.error(err);
+
+      setError(
+        err.message || "Failed to load users."
+      );
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    fetchUsers();
+    loadUsers();
   }, []);
 
+  const getUserName = (user) => {
+    return (
+      user.username ||
+      user.name ||
+      user.fullName ||
+      "Unnamed User"
+    );
+  };
+
+  const getRole = (user) => {
+    return user.role || "user";
+  };
+
+  const getInitials = (user) => {
+    const name = getUserName(user);
+
+    if (!name || name === "Unnamed User") {
+      return "U";
+    }
+
+    const parts = name.trim().split(" ");
+
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+
+    return name.substring(0, 2).toUpperCase();
+  };
+
   const formatDate = (date) => {
-    if (!date) return "N/A";
+    if (!date) return "—";
 
-    return new Date(date).toLocaleDateString("en-ZA", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  };
+    const formatted = new Date(date);
 
-  // Change user role
-  const handleRoleChange = async (user) => {
-    const newRole = user.role === "admin" ? "user" : "admin";
-
-    const confirmed = window.confirm(
-      `Change ${user.username}'s role to ${newRole}?`
-    );
-
-    if (!confirmed) return;
-
-    try {
-      setActionLoading(user._id);
-      setError("");
-
-      const token = localStorage.getItem("token");
-
-      const baseUrl = API_URL || "/api";
-      const response = await fetch(
-        `${baseUrl}/users/${user._id}/role`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            role: newRole,
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message || "Failed to update user role"
-        );
-      }
-
-      setUsers((currentUsers) =>
-        currentUsers.map((item) =>
-          item._id === user._id
-            ? { ...item, role: newRole }
-            : item
-        )
-      );
-    } catch (err) {
-      console.error("ROLE UPDATE ERROR:", err);
-      setError(err.message || "Failed to update user role");
-    } finally {
-      setActionLoading("");
+    if (Number.isNaN(formatted.getTime())) {
+      return "—";
     }
-  };
 
-  // Delete user
-  const handleDelete = async (user) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${user.username}?`
-    );
-
-    if (!confirmed) return;
-
-    try {
-      setActionLoading(user._id);
-      setError("");
-
-      const token = localStorage.getItem("token");
-
-      const baseUrl = API_URL || "/api";
-      const response = await fetch(
-        `${baseUrl}/users/${user._id}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message || "Failed to delete user"
-        );
+    return formatted.toLocaleDateString(
+      "en-ZA",
+      {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
       }
-
-      setUsers((currentUsers) =>
-        currentUsers.filter(
-          (item) => item._id !== user._id
-        )
-      );
-    } catch (err) {
-      console.error("DELETE USER ERROR:", err);
-      setError(err.message || "Failed to delete user");
-    } finally {
-      setActionLoading("");
-    }
+    );
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    navigate("/");
-  };
+  const adminCount = users.filter(
+    (user) =>
+      getRole(user).toLowerCase() === "admin"
+  ).length;
 
-  const visibleUsers = users.filter((user) => `${user.username} ${user.email} ${user.role}`.toLowerCase().includes(search.toLowerCase()));
+  const regularUserCount = users.filter(
+    (user) =>
+      getRole(user).toLowerCase() !== "admin"
+  ).length;
 
   return (
-    <div className="users-page">
+    <div style={styles.page}>
+      {/* HEADER */}
+      <header style={styles.header}>
+        <div style={styles.headerInner}>
+          <div style={styles.brand}>
+            <img
+              src={AIRBNB_LOGO}
+              alt="Airbnb"
+              style={styles.logo}
+            />
 
-      {/* TOP NAVIGATION */}
-      <nav className="top-nav">
+            <div style={styles.divider}></div>
 
-        <div className="top-nav-logo">
-          <span className="admin-brand-mark">
-            <AirbnbMark />
-          </span>
-          Airbnb
-        </div>
-
-        <div className="top-nav-links">
+            <span style={styles.portalText}>
+              Admin Portal
+            </span>
+          </div>
 
           <button
+            type="button"
+            style={styles.dashboardButton}
             onClick={() => navigate("/dashboard")}
           >
-            🏠 Dashboard
+            <FaArrowLeft />
+            Dashboard
           </button>
+        </div>
+      </header>
+
+      {/* MAIN */}
+      <main style={styles.main}>
+        {/* INTRO */}
+        <div style={styles.pageIntro}>
+          <div>
+            <div style={styles.breadcrumb}>
+              <span
+                style={styles.breadcrumbLink}
+                onClick={() =>
+                  navigate("/dashboard")
+                }
+              >
+                Dashboard
+              </span>
+
+              <span>/</span>
+
+              <span>Users</span>
+            </div>
+
+            <h1 style={styles.title}>
+              Users
+            </h1>
+
+            <p style={styles.subtitle}>
+              View registered users and manage account information.
+            </p>
+          </div>
 
           <button
-            onClick={() => navigate("/listings")}
+            type="button"
+            style={styles.refreshButton}
+            onClick={() => loadUsers(true)}
+            disabled={refreshing}
           >
-            🏡 Listings
+            <FaSyncAlt
+              style={{
+                animation: refreshing
+                  ? "spin 1s linear infinite"
+                  : "none",
+              }}
+            />
+
+            {refreshing
+              ? "Refreshing..."
+              : "Refresh"}
           </button>
-
-          <button onClick={() => navigate("/listings/new")}>＋ Add Listing</button>
-
-          <button
-            onClick={() => navigate("/reservations")}
-          >
-            📅 Reservations
-          </button>
-
-          <button className="active">
-            👥 Users
-          </button>
-
-          <button
-            className="logout-nav"
-            onClick={handleLogout}
-          >
-            🚪 Logout
-          </button>
-
         </div>
 
-      </nav>
+        {/* ERROR */}
+        {error && (
+          <div style={styles.error}>
+            <FaExclamationCircle
+              style={styles.alertIcon}
+            />
 
-      {/* USERS HEADER */}
-      <div className="users-header">
+            <div>
+              <strong>
+                Unable to load users
+              </strong>
 
-        <div>
-          <h1>Users</h1>
+              <p>{error}</p>
 
-          <p>
-            Manage registered users on your platform
-          </p>
-        </div>
+              <button
+                type="button"
+                style={styles.retryButton}
+                onClick={() => loadUsers()}
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        )}
 
-        <div className="user-count">
-          {users.length} Users
-        </div>
+        {/* SUMMARY */}
+        {!loading && users.length > 0 && (
+          <div style={styles.statsGrid}>
+            <div style={styles.statCard}>
+              <div
+                style={{
+                  ...styles.statIcon,
+                  background: "#fff0f3",
+                  color: "#e31c5f",
+                }}
+              >
+                <FaUsers />
+              </div>
 
-        <input className="admin-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search users by name, email or role" aria-label="Search users" />
+              <div>
+                <p style={styles.statLabel}>
+                  Total Users
+                </p>
 
-      </div>
+                <h2 style={styles.statValue}>
+                  {users.length}
+                </h2>
+              </div>
+            </div>
 
-      {/* LOADING */}
-      {loading && (
-        <div className="listings-message">
-          Loading users...
-        </div>
-      )}
+            <div style={styles.statCard}>
+              <div
+                style={{
+                  ...styles.statIcon,
+                  background: "#eaf7ee",
+                  color: "#2e7d32",
+                }}
+              >
+                <FaUser />
+              </div>
 
-      {/* ERROR */}
-      {error && (
-        <div className="listings-error">
-          {error}
-        </div>
-      )}
+              <div>
+                <p style={styles.statLabel}>
+                  Regular Users
+                </p>
 
-      {/* EMPTY USERS */}
-      {!loading &&
-        !error &&
-        users.length === 0 && (
+                <h2 style={styles.statValue}>
+                  {regularUserCount}
+                </h2>
+              </div>
+            </div>
 
-          <div className="empty-listings">
+            <div style={styles.statCard}>
+              <div
+                style={{
+                  ...styles.statIcon,
+                  background: "#fff8e6",
+                  color: "#9a6b00",
+                }}
+              >
+                <FaUserShield />
+              </div>
 
-            <h2>No users found</h2>
+              <div>
+                <p style={styles.statLabel}>
+                  Administrators
+                </p>
 
-            <p>
-              Registered users will appear here.
+                <h2 style={styles.statValue}>
+                  {adminCount}
+                </h2>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* LOADING */}
+        {loading ? (
+          <div style={styles.loadingCard}>
+            <div style={styles.spinner}></div>
+
+            <h2 style={styles.loadingTitle}>
+              Loading users
+            </h2>
+
+            <p style={styles.loadingText}>
+              Please wait while we retrieve registered users.
+            </p>
+          </div>
+        ) : users.length === 0 ? (
+          /* EMPTY */
+          <div style={styles.empty}>
+            <div style={styles.emptyIcon}>
+              <FaUsers />
+            </div>
+
+            <h2 style={styles.emptyTitle}>
+              No users found
+            </h2>
+
+            <p style={styles.emptyText}>
+              Registered users will appear here once accounts are created.
             </p>
 
+            <button
+              type="button"
+              style={styles.emptyButton}
+              onClick={() => loadUsers(true)}
+            >
+              <FaSyncAlt />
+              Refresh Users
+            </button>
           </div>
-        )}
+        ) : (
+          /* USERS TABLE */
+          <div style={styles.tableCard}>
+            <div style={styles.tableHeader}>
+              <div>
+                <h2 style={styles.tableTitle}>
+                  Registered Users
+                </h2>
 
-      {/* USERS TABLE */}
-      {!loading &&
-        users.length > 0 && (
+                <p style={styles.tableSubtitle}>
+                  {users.length} registered{" "}
+                  {users.length === 1
+                    ? "user"
+                    : "users"}
+                </p>
+              </div>
 
-          <div className="users-table-container">
+              <div style={styles.liveBadge}>
+                <FaCheckCircle />
+                Live Data
+              </div>
+            </div>
 
-            <table className="users-table">
+            <div style={styles.tableWrapper}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>
+                      User
+                    </th>
 
-              <thead>
-                <tr>
-                  <th>User</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Joined</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
+                    <th style={styles.th}>
+                      Email
+                    </th>
 
-              <tbody>
+                    <th style={styles.th}>
+                      Role
+                    </th>
 
-                {visibleUsers.map((user) => {
+                    <th style={styles.th}>
+                      Joined
+                    </th>
+                  </tr>
+                </thead>
 
-                  const isCurrentUser =
-                    currentUser &&
-                    (currentUser.id === user._id ||
-                      currentUser._id === user._id);
+                <tbody>
+                  {users.map((user) => {
+                    const role = getRole(user);
 
-                  return (
-                    <tr key={user._id}>
+                    const isAdmin =
+                      role.toLowerCase() ===
+                      "admin";
 
-                      <td>
-                        <div className="user-info">
+                    return (
+                      <tr
+                        key={
+                          user._id ||
+                          user.id
+                        }
+                        style={styles.tr}
+                      >
+                        {/* USER */}
+                        <td style={styles.td}>
+                          <div
+                            style={
+                              styles.userCell
+                            }
+                          >
+                            <div
+                              style={
+                                styles.avatar
+                              }
+                            >
+                              {getInitials(user)}
+                            </div>
 
-                          <div className="user-avatar">
-                            {(user.username || "U")
-                              .charAt(0)
-                              .toUpperCase()}
+                            <div>
+                              <strong
+                                style={
+                                  styles.userName
+                                }
+                              >
+                                {getUserName(
+                                  user
+                                )}
+                              </strong>
+
+                              <span
+                                style={
+                                  styles.userSubtext
+                                }
+                              >
+                                Registered account
+                              </span>
+                            </div>
                           </div>
+                        </td>
 
-                          <strong>
-                            {user.username}
-                          </strong>
+                        {/* EMAIL */}
+                        <td style={styles.td}>
+                          <div
+                            style={
+                              styles.emailCell
+                            }
+                          >
+                            <FaEnvelope />
 
-                        </div>
-                      </td>
+                            <span>
+                              {user.email ||
+                                "—"}
+                            </span>
+                          </div>
+                        </td>
 
-                      <td>
-                        {user.email}
-                      </td>
+                        {/* ROLE */}
+                        <td style={styles.td}>
+                          <span
+                            style={{
+                              ...styles.role,
+                              ...(isAdmin
+                                ? styles.adminRole
+                                : styles.userRole),
+                            }}
+                          >
+                            {isAdmin ? (
+                              <FaUserShield />
+                            ) : (
+                              <FaUser />
+                            )}
 
-                      <td>
-                        <span
-                          className={`user-role ${user.role}`}
-                        >
-                          {user.role}
-                        </span>
-                      </td>
-
-                      <td>
-                        {formatDate(user.createdAt)}
-                      </td>
-
-                      <td>
-
-                        {isCurrentUser ? (
-
-                          <span className="current-user-label">
-                            Current user
+                            {role}
                           </span>
+                        </td>
 
-                        ) : (
+                        {/* JOINED */}
+                        <td style={styles.td}>
+                          <div
+                            style={
+                              styles.dateCell
+                            }
+                          >
+                            <FaCalendarAlt />
 
-                          <div className="user-actions">
-
-                            <button
-                              className="role-button"
-                              onClick={() =>
-                                handleRoleChange(user)
-                              }
-                              disabled={
-                                actionLoading === user._id
-                              }
-                            >
-                              {actionLoading === user._id
-                                ? "Updating..."
-                                : user.role === "admin"
-                                ? "Make User"
-                                : "Make Admin"}
-                            </button>
-
-                            <button
-                              className="delete-user-button"
-                              onClick={() =>
-                                handleDelete(user)
-                              }
-                              disabled={
-                                actionLoading === user._id
-                              }
-                            >
-                              {actionLoading === user._id
-                                ? "Deleting..."
-                                : "Delete"}
-                            </button>
-
+                            <span>
+                              {formatDate(
+                                user.createdAt ||
+                                  user.dateCreated ||
+                                  user.created_at
+                              )}
+                            </span>
                           </div>
-
-                        )}
-
-                      </td>
-
-                    </tr>
-                  );
-                })}
-
-              </tbody>
-
-            </table>
-
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
+        {/* COUNT */}
+        {!loading && users.length > 0 && (
+          <div style={styles.bottomText}>
+            Showing{" "}
+            <strong>{users.length}</strong>{" "}
+            registered user
+            {users.length !== 1
+              ? "s"
+              : ""}
+          </div>
+        )}
+      </main>
+
+      {/* FOOTER */}
+      <footer style={styles.footer}>
+        <div style={styles.footerInner}>
+          <img
+            src={AIRBNB_LOGO}
+            alt="Airbnb"
+            style={styles.footerLogo}
+          />
+
+          <span>Admin Portal</span>
+
+          <span style={styles.footerDot}>
+            •
+          </span>
+
+          <span>
+            User Management
+          </span>
+        </div>
+      </footer>
     </div>
   );
 }
 
-export default Users;
+const styles = {
+  page: {
+    minHeight: "100vh",
+    background: "#f7f7f7",
+    color: "#222222",
+    fontFamily:
+      "Arial, Helvetica, sans-serif",
+  },
+
+  header: {
+    background: "#ffffff",
+    borderBottom: "1px solid #ebebeb",
+    position: "sticky",
+    top: 0,
+    zIndex: 20,
+  },
+
+  headerInner: {
+    maxWidth: "1200px",
+    margin: "0 auto",
+    padding: "18px 28px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "20px",
+  },
+
+  brand: {
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+  },
+
+  logo: {
+    width: "108px",
+    height: "auto",
+    display: "block",
+  },
+
+  divider: {
+    width: "1px",
+    height: "25px",
+    background: "#dddddd",
+  },
+
+  portalText: {
+    color: "#717171",
+    fontSize: "14px",
+    fontWeight: "600",
+  },
+
+  dashboardButton: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    padding: "11px 16px",
+    border: "1px solid #dddddd",
+    borderRadius: "10px",
+    background: "#ffffff",
+    color: "#222222",
+    fontSize: "14px",
+    fontWeight: "600",
+    cursor: "pointer",
+  },
+
+  main: {
+    maxWidth: "1200px",
+    margin: "0 auto",
+    padding: "42px 28px 70px",
+  },
+
+  pageIntro: {
+    display: "flex",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    gap: "20px",
+    marginBottom: "30px",
+  },
+
+  breadcrumb: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    marginBottom: "14px",
+    color: "#717171",
+    fontSize: "13px",
+  },
+
+  breadcrumbLink: {
+    color: "#555555",
+    fontWeight: "600",
+    cursor: "pointer",
+  },
+
+  title: {
+    margin: 0,
+    color: "#222222",
+    fontSize: "34px",
+    lineHeight: 1.2,
+    letterSpacing: "-0.5px",
+  },
+
+  subtitle: {
+    margin: "9px 0 0",
+    color: "#717171",
+    fontSize: "15px",
+  },
+
+  refreshButton: {
+    display: "flex",
+    alignItems: "center",
+    gap: "9px",
+    padding: "12px 18px",
+    border: "1px solid #dddddd",
+    borderRadius: "10px",
+    background: "#ffffff",
+    color: "#222222",
+    fontSize: "14px",
+    fontWeight: "700",
+    cursor: "pointer",
+  },
+
+  error: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "13px",
+    padding: "16px 18px",
+    marginBottom: "22px",
+    border: "1px solid #ffd2d2",
+    borderRadius: "12px",
+    background: "#fff1f1",
+    color: "#b42318",
+  },
+
+  alertIcon: {
+    marginTop: "2px",
+    fontSize: "18px",
+    flexShrink: 0,
+  },
+
+  retryButton: {
+    marginTop: "10px",
+    padding: "8px 13px",
+    border: "1px solid #e0a0a0",
+    borderRadius: "7px",
+    background: "#ffffff",
+    color: "#b42318",
+    fontSize: "12px",
+    fontWeight: "700",
+    cursor: "pointer",
+  },
+
+  statsGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(3, minmax(0, 1fr))",
+    gap: "16px",
+    marginBottom: "24px",
+  },
+
+  statCard: {
+    display: "flex",
+    alignItems: "center",
+    gap: "15px",
+    padding: "20px",
+    background: "#ffffff",
+    border: "1px solid #eeeeee",
+    borderRadius: "14px",
+    boxShadow:
+      "0 2px 8px rgba(0, 0, 0, 0.035)",
+  },
+
+  statIcon: {
+    width: "44px",
+    height: "44px",
+    borderRadius: "11px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "17px",
+    flexShrink: 0,
+  },
+
+  statLabel: {
+    margin: 0,
+    color: "#717171",
+    fontSize: "12px",
+    fontWeight: "600",
+  },
+
+  statValue: {
+    margin: "5px 0 0",
+    color: "#222222",
+    fontSize: "25px",
+    lineHeight: 1,
+  },
+
+  loadingCard: {
+    minHeight: "300px",
+    padding: "40px",
+    background: "#ffffff",
+    border: "1px solid #eeeeee",
+    borderRadius: "16px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    textAlign: "center",
+  },
+
+  spinner: {
+    width: "34px",
+    height: "34px",
+    marginBottom: "18px",
+    border: "3px solid #eeeeee",
+    borderTop: "3px solid #ff385c",
+    borderRadius: "50%",
+    animation:
+      "spin 1s linear infinite",
+  },
+
+  loadingTitle: {
+    margin: 0,
+    color: "#222222",
+    fontSize: "20px",
+  },
+
+  loadingText: {
+    margin: "8px 0 0",
+    color: "#717171",
+    fontSize: "14px",
+  },
+
+  empty: {
+    padding: "75px 30px",
+    background: "#ffffff",
+    border: "1px solid #eeeeee",
+    borderRadius: "16px",
+    textAlign: "center",
+    boxShadow:
+      "0 2px 10px rgba(0, 0, 0, 0.035)",
+  },
+
+  emptyIcon: {
+    width: "65px",
+    height: "65px",
+    margin: "0 auto 20px",
+    borderRadius: "50%",
+    background: "#fff0f3",
+    color: "#e31c5f",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "25px",
+  },
+
+  emptyTitle: {
+    margin: 0,
+    color: "#222222",
+    fontSize: "22px",
+  },
+
+  emptyText: {
+    maxWidth: "500px",
+    margin: "10px auto 0",
+    color: "#717171",
+    fontSize: "14px",
+    lineHeight: 1.6,
+  },
+
+  emptyButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "8px",
+    marginTop: "22px",
+    padding: "12px 18px",
+    border: "none",
+    borderRadius: "9px",
+    background: "#ff385c",
+    color: "#ffffff",
+    fontSize: "14px",
+    fontWeight: "700",
+    cursor: "pointer",
+  },
+
+  tableCard: {
+    background: "#ffffff",
+    border: "1px solid #eeeeee",
+    borderRadius: "16px",
+    overflow: "hidden",
+    boxShadow:
+      "0 2px 10px rgba(0, 0, 0, 0.035)",
+  },
+
+  tableHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "20px",
+    padding: "22px 24px",
+    borderBottom: "1px solid #eeeeee",
+  },
+
+  tableTitle: {
+    margin: 0,
+    color: "#222222",
+    fontSize: "18px",
+  },
+
+  tableSubtitle: {
+    margin: "5px 0 0",
+    color: "#717171",
+    fontSize: "12px",
+  },
+
+  liveBadge: {
+    display: "flex",
+    alignItems: "center",
+    gap: "7px",
+    padding: "8px 12px",
+    borderRadius: "999px",
+    background: "#f1faf3",
+    color: "#2e7d32",
+    fontSize: "12px",
+    fontWeight: "700",
+  },
+
+  tableWrapper: {
+    overflowX: "auto",
+  },
+
+  table: {
+    width: "100%",
+    minWidth: "800px",
+    borderCollapse: "collapse",
+  },
+
+  th: {
+    padding: "15px 20px",
+    textAlign: "left",
+    background: "#fafafa",
+    borderBottom: "1px solid #eeeeee",
+    color: "#717171",
+    fontSize: "11px",
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: "0.4px",
+    whiteSpace: "nowrap",
+  },
+
+  tr: {
+    transition: "background 0.2s ease",
+  },
+
+  td: {
+    padding: "17px 20px",
+    borderBottom: "1px solid #eeeeee",
+    color: "#333333",
+    fontSize: "13px",
+    verticalAlign: "middle",
+  },
+
+  userCell: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    minWidth: "190px",
+  },
+
+  avatar: {
+    width: "40px",
+    height: "40px",
+    borderRadius: "50%",
+    background: "#fff0f3",
+    color: "#e31c5f",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "12px",
+    fontWeight: "800",
+    flexShrink: 0,
+  },
+
+  userName: {
+    display: "block",
+    color: "#222222",
+    fontSize: "14px",
+    fontWeight: "700",
+  },
+
+  userSubtext: {
+    display: "block",
+    marginTop: "3px",
+    color: "#999999",
+    fontSize: "11px",
+  },
+
+  emailCell: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    color: "#555555",
+    whiteSpace: "nowrap",
+  },
+
+  role: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "7px",
+    padding: "7px 11px",
+    borderRadius: "999px",
+    fontSize: "11px",
+    fontWeight: "700",
+    textTransform: "capitalize",
+  },
+
+  adminRole: {
+    background: "#fff0f3",
+    color: "#e31c5f",
+  },
+
+  userRole: {
+    background: "#f1f1f1",
+    color: "#555555",
+  },
+
+  dateCell: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    color: "#555555",
+    whiteSpace: "nowrap",
+  },
+
+  bottomText: {
+    marginTop: "16px",
+    color: "#717171",
+    fontSize: "13px",
+  },
+
+  footer: {
+    background: "#ffffff",
+    borderTop: "1px solid #ebebeb",
+  },
+
+  footerInner: {
+    maxWidth: "1200px",
+    margin: "0 auto",
+    padding: "22px 28px",
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    flexWrap: "wrap",
+    color: "#717171",
+    fontSize: "12px",
+  },
+
+  footerLogo: {
+    width: "76px",
+    height: "auto",
+  },
+
+  footerDot: {
+    color: "#aaaaaa",
+  },
+};

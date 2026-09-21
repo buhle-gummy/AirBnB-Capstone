@@ -1,33 +1,64 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+
 import Login from "./pages/Login";
-import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Listings from "./pages/Listings";
 import AddListing from "./pages/AddListing";
 import EditListing from "./pages/EditListing";
 import Reservations from "./pages/Reservations";
 import Users from "./pages/Users";
-import ProtectedRoute from "./ProtectedRoute";
 
-function Protected({ children }) {
-  return <ProtectedRoute>{children}</ProtectedRoute>;
-}
-
-export default function App() {
+function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
-        <Route path="/listings" element={<Protected><Listings /></Protected>} />
-        <Route path="/listings/new" element={<Protected><AddListing /></Protected>} />
-        <Route path="/listings/edit/:id" element={<Protected><EditListing /></Protected>} />
-        <Route path="/reservations" element={<Protected><Reservations /></Protected>} />
-        <Route path="/users" element={<Protected><Users /></Protected>} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route
+          path="/"
+          element={<Navigate to="/login" replace />}
+        />
+
+        <Route
+          path="/login"
+          element={<Login />}
+        />
+
+        <Route
+          path="/dashboard"
+          element={<Dashboard />}
+        />
+
+        <Route
+          path="/listings"
+          element={<Listings />}
+        />
+
+        <Route
+          path="/listings/add"
+          element={<AddListing />}
+        />
+
+        <Route
+          path="/listings/edit/:id"
+          element={<EditListing />}
+        />
+
+        <Route
+          path="/reservations"
+          element={<Reservations />}
+        />
+
+        <Route
+          path="/users"
+          element={<Users />}
+        />
       </Routes>
     </BrowserRouter>
   );
 }
+
+export default App;

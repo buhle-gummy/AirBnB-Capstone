@@ -1,101 +1,134 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import AirbnbMark from "../components/AirbnbMark";
 
-import { API_URL } from "../config/api";
-function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(false);
+import Navbar from "../components/Navbar";
+import { api } from "../services/api";
 
+import "./Auth.css";
+
+export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
+  const [form, setForm] = useState({
+    email: "",
+    password: "",
+  });
 
-    setMessage("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  function change(event) {
+    setForm({
+      ...form,
+      [event.target.name]: event.target.value,
+    });
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+
+    setError("");
     setLoading(true);
 
     try {
-      const baseUrl = API_URL || "/api";
-      const response = await fetch(`${baseUrl}/users/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: email.trim().toLowerCase(),
-          password,
-        }),
-      });
+      const data = await api.login(form);
 
-      const data = await response.json();
+      const token =
+        data?.token ||
+        data?.accessToken ||
+        data?.data?.token;
 
-      if (!response.ok) {
-        setMessage(data.message || "Login failed");
-        return;
+      const user =
+        data?.user ||
+        data?.data?.user ||
+        {};
+
+      if (!token) {
+        throw new Error(
+          "Login succeeded but no token was returned."
+        );
       }
 
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem("token", token);
 
-      setMessage("Login successful!");
-      const destination = location.state?.from || (data.user?.role === "admin" ? "/dashboard" : "/");
-      navigate(destination, { state: location.state?.booking });
-    } catch (error) {
-      setMessage("Unable to connect to the server.");
-      console.error(error);
+      localStorage.setItem(
+        "user",
+        JSON.stringify(user)
+      );
+
+      navigate(
+        location.state?.from || "/dashboard"
+      );
+    } catch (err) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
-    <div className="login-page">
-      <div className="login-card">
-        <Link to="/" className="login-brand">
-          <span className="admin-brand-mark">
-            <AirbnbMark />
-          </span>
-          Airbnb
-        </Link>
-        <p className="admin-kicker">WELCOME BACK</p>
-        <h1>Sign in to Airbnb</h1>
-        <p>Access your stays and reservations.</p>
+    <>
+      <Navbar />
 
-        <form onSubmit={handleLogin}>
-          <label>Email Address</label>
-          <input
-            type="email"
-            placeholder="Enter your email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
+      <main className="auth-page">
+        <form
+          className="auth-card"
+          onSubmit={submit}
+        >
+          <h1>Welcome back</h1>
 
-          <label>Password</label>
-          <input
-            type="password"
-            placeholder="Enter your password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+          <p>
+            Log in to continue your Airbnb journey.
+          </p>
 
-          <button type="submit" disabled={loading}>
-            {loading ? "Signing in..." : "Sign In"}
+          <label>
+            Email
+
+            <input
+              type="email"
+              name="email"
+              value={form.email}
+              onChange={change}
+              required
+            />
+          </label>
+
+          <label>
+            Password
+
+            <input
+              type="password"
+              name="password"
+              value={form.password}
+              onChange={change}
+              required
+            />
+          </label>
+
+          {error && (
+            <div className="form-error">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+          >
+            {loading
+              ? "Logging in..."
+              : "Log in"}
           </button>
-        </form>
 
-        {message && <p className="login-message" role="alert">{message}</p>}
-        <p className="auth-switch">
-          New to Airbnb? <Link to="/register" state={location.state}>Create an account</Link>
-        </p>
-      </div>
-    </div>
+          <p className="auth-footer">
+            Don't have an account?{" "}
+            <Link to="/register">
+              Sign up
+            </Link>
+          </p>
+        </form>
+      </main>
+    </>
   );
 }
-
-export default Login;

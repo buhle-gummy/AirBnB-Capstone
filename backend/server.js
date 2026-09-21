@@ -9,57 +9,42 @@ dotenv.config();
 
 const app = express();
 
-/* =========================
-   ENVIRONMENT
-========================= */
-
 const PORT = process.env.PORT || 10000;
 const MONGO_URI = process.env.MONGO_URI;
-const JWT_SECRET = process.env.JWT_SECRET || "airbnb-capstone-secret";
+const JWT_SECRET =
+  process.env.JWT_SECRET || "airbnb-capstone-secret";
 
-const allowedOrigins = (process.env.CLIENT_URLS || "")
-  .split(",")
-  .map((url) => url.trim())
-  .filter(Boolean);
-
-/* =========================
-   MIDDLEWARE
-========================= */
+/* =========================================================
+   CORS
+========================================================= */
 
 app.use(
   cors({
-    origin: function (origin, callback) {
-      // Allow requests without an origin
-      // such as Postman or server-to-server requests.
-      if (!origin) {
-        return callback(null, true);
-      }
-
-      // During deployment, allow configured origins.
-      if (allowedOrigins.length === 0) {
-        return callback(null, true);
-      }
-
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      return callback(
-        new Error("CORS: Origin not allowed")
-      );
-    },
+    origin: [
+      "http://localhost:5173",
+      "http://localhost:5174",
+      "http://localhost:5176",
+    ],
     credentials: true,
   })
 );
 
-app.use(express.json());
+/* =========================================================
+   BODY PARSING
+========================================================= */
 
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Middleware to verify JWT token
+/* =========================================================
+   AUTHENTICATION
+========================================================= */
+
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
+
+  const token =
+    authHeader && authHeader.split(" ")[1];
 
   if (!token) {
     return res.status(401).json({
@@ -75,25 +60,26 @@ const authenticateToken = (req, res, next) => {
         message: "Invalid or expired token",
       });
     }
+
     req.user = user;
     next();
   });
 };
 
-// Middleware to verify admin role
 const requireAdmin = (req, res, next) => {
-  if (req.user.role !== "admin") {
+  if (!req.user || req.user.role !== "admin") {
     return res.status(403).json({
       success: false,
       message: "Admin access required",
     });
   }
+
   next();
 };
 
-/* =========================
-   DATABASE SCHEMAS
-========================= */
+/* =========================================================
+   ACCOMMODATION SCHEMA
+========================================================= */
 
 const accommodationSchema = new mongoose.Schema(
   {
@@ -124,7 +110,7 @@ const accommodationSchema = new mongoose.Schema(
 
     guests: {
       type: Number,
-      default: 2,
+      default: 1,
     },
 
     type: {
@@ -179,7 +165,7 @@ const accommodationSchema = new mongoose.Schema(
 
     rating: {
       type: Number,
-      default: 5,
+      default: 0,
     },
 
     reviews: {
@@ -189,13 +175,23 @@ const accommodationSchema = new mongoose.Schema(
 
     host: {
       type: String,
-      default: "Airbnb Host",
+      default: "",
     },
   },
   {
     timestamps: true,
   }
 );
+
+const Accommodation =
+  mongoose.model(
+    "Accommodation",
+    accommodationSchema
+  );
+
+/* =========================================================
+   USER SCHEMA
+========================================================= */
 
 const userSchema = new mongoose.Schema(
   {
@@ -210,8 +206,8 @@ const userSchema = new mongoose.Schema(
       type: String,
       unique: true,
       sparse: true,
-      trim: true,
       lowercase: true,
+      trim: true,
     },
 
     password: {
@@ -230,6 +226,12 @@ const userSchema = new mongoose.Schema(
   }
 );
 
+const User = mongoose.model("User", userSchema);
+
+/* =========================================================
+   RESERVATION SCHEMA
+========================================================= */
+
 const reservationSchema = new mongoose.Schema(
   {
     accommodation: {
@@ -246,12 +248,12 @@ const reservationSchema = new mongoose.Schema(
 
     guestName: {
       type: String,
-      default: "",
+      required: true,
     },
 
     guestEmail: {
       type: String,
-      default: "",
+      required: true,
     },
 
     checkIn: {
@@ -266,17 +268,21 @@ const reservationSchema = new mongoose.Schema(
 
     guests: {
       type: Number,
-      default: 1,
+      required: true,
     },
 
     totalPrice: {
       type: Number,
-      default: 0,
+      required: true,
     },
 
     status: {
       type: String,
-      enum: ["pending", "confirmed", "cancelled"],
+      enum: [
+        "pending",
+        "confirmed",
+        "cancelled",
+      ],
       default: "confirmed",
     },
   },
@@ -285,593 +291,1157 @@ const reservationSchema = new mongoose.Schema(
   }
 );
 
-const Accommodation =
-  mongoose.models.Accommodation ||
-  mongoose.model("Accommodation", accommodationSchema);
-
-const User =
-  mongoose.models.User ||
-  mongoose.model("User", userSchema);
-
 const Reservation =
-  mongoose.models.Reservation ||
-  mongoose.model("Reservation", reservationSchema);
+  mongoose.model(
+    "Reservation",
+    reservationSchema
+  );
 
-/* =========================
-   HEALTH CHECK
-========================= */
+/* =========================================================
+   ROOT ROUTE
+========================================================= */
 
 app.get("/", (req, res) => {
-  res.json({
-    success: true,
-    message: "Airbnb Capstone API is running!",
-  });
+  res.send("Airbnb Capstone API is running!");
 });
 
-app.get("/api/health", (req, res) => {
-  res.json({
-    success: true,
-    message: "Backend is healthy",
-    database:
-      mongoose.connection.readyState === 1
-        ? "connected"
-        : "disconnected",
-  });
-});
+/* =========================================================
+   ACCOMMODATION ROUTES
+========================================================= */
 
-/* =========================
-   ACCOMMODATIONS
-========================= */
+/* GET ALL ACCOMMODATIONS */
 
-// GET ALL
-app.get("/api/accommodations", async (req, res) => {
-  try {
-    const accommodations = await Accommodation.find().sort({
-      createdAt: -1,
-    });
-
-    res.json({
-      success: true,
-      count: accommodations.length,
-      accommodations,
-    });
-  } catch (error) {
-    console.error("GET accommodations error:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Unable to load accommodations",
-      error: error.message,
-    });
-  }
-});
-
-// GET ONE
-app.get("/api/accommodations/:id", async (req, res) => {
-  try {
-    const accommodation =
-      await Accommodation.findById(req.params.id);
-
-    if (!accommodation) {
-      return res.status(404).json({
-        success: false,
-        message: "Accommodation not found",
-      });
-    }
-
-    res.json({
-      success: true,
-      accommodation,
-    });
-  } catch (error) {
-    console.error("GET accommodation error:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Unable to load accommodation",
-      error: error.message,
-    });
-  }
-});
-
-// CREATE (Admin only)
-app.post("/api/accommodations", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const accommodation =
-      await Accommodation.create(req.body);
-
-    res.status(201).json({
-      success: true,
-      message: "Accommodation created successfully",
-      accommodation,
-    });
-  } catch (error) {
-    console.error("CREATE accommodation error:", error);
-
-    res.status(400).json({
-      success: false,
-      message: "Unable to create accommodation",
-      error: error.message,
-    });
-  }
-});
-
-// UPDATE (Admin only)
-app.put("/api/accommodations/:id", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const accommodation =
-      await Accommodation.findByIdAndUpdate(
-        req.params.id,
-        req.body,
-        {
-          new: true,
-          runValidators: true,
-        }
-      );
-
-    if (!accommodation) {
-      return res.status(404).json({
-        success: false,
-        message: "Accommodation not found",
-      });
-    }
-
-    res.json({
-      success: true,
-      message: "Accommodation updated successfully",
-      accommodation,
-    });
-  } catch (error) {
-    console.error("UPDATE accommodation error:", error);
-
-    res.status(400).json({
-      success: false,
-      message: "Unable to update accommodation",
-      error: error.message,
-    });
-  }
-});
-
-// DELETE (Admin only)
-app.delete("/api/accommodations/:id", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const accommodation =
-      await Accommodation.findByIdAndDelete(
-        req.params.id
-      );
-
-    if (!accommodation) {
-      return res.status(404).json({
-        success: false,
-        message: "Accommodation not found",
-      });
-    }
-
-    res.json({
-      success: true,
-      message: "Accommodation deleted successfully",
-    });
-  } catch (error) {
-    console.error("DELETE accommodation error:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Unable to delete accommodation",
-      error: error.message,
-    });
-  }
-});
-
-/* =========================
-   USER REGISTRATION
-========================= */
-
-app.post("/api/users/register", async (req, res) => {
-  try {
-    const {
-      username,
-      email,
-      password,
-      role,
-    } = req.body;
-
-    if (!username || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Username and password are required",
-      });
-    }
-
-    const existingUser = await User.findOne({
-      $or: [
-        { username },
-        ...(email ? [{ email }] : []),
-      ],
-    });
-
-    if (existingUser) {
-      return res.status(409).json({
-        success: false,
-        message: "User already exists",
-      });
-    }
-
-    const hashedPassword =
-      await bcrypt.hash(password, 10);
-
-    const user = await User.create({
-      username,
-      email,
-      password: hashedPassword,
-      role: role === "admin" ? "admin" : "user",
-    });
-
-    const token = jwt.sign(
-      {
-        id: user._id,
-        username: user.username,
-        role: user.role,
-      },
-      JWT_SECRET,
-      {
-        expiresIn: "7d",
-      }
-    );
-
-    res.status(201).json({
-      success: true,
-      message: "Registration successful",
-      token,
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-      },
-    });
-  } catch (error) {
-    console.error("REGISTER error:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Unable to register user",
-      error: error.message,
-    });
-  }
-});
-
-/* =========================
-   USER LOGIN
-========================= */
-
-app.post("/api/users/login", async (req, res) => {
-  try {
-    const {
-      username,
-      email,
-      password,
-    } = req.body;
-
-    const loginValue = username || email;
-
-    if (!loginValue || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Username/email and password are required",
-      });
-    }
-
-    const user = await User.findOne({
-      $or: [
-        { username: loginValue },
-        { email: loginValue.toLowerCase() },
-      ],
-    });
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid username or password",
-      });
-    }
-
-    const passwordMatch =
-      await bcrypt.compare(
-        password,
-        user.password
-      );
-
-    if (!passwordMatch) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid username or password",
-      });
-    }
-
-    const token = jwt.sign(
-      {
-        id: user._id,
-        username: user.username,
-        role: user.role,
-      },
-      JWT_SECRET,
-      {
-        expiresIn: "7d",
-      }
-    );
-
-    res.json({
-      success: true,
-      message: "Login successful",
-      token,
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-      },
-    });
-  } catch (error) {
-    console.error("LOGIN error:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Unable to login",
-      error: error.message,
-    });
-  }
-});
-
-/* =========================
-   USER MANAGEMENT (ADMIN)
-========================= */
-
-// GET ALL USERS (Admin only)
-app.get("/api/users", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const users = await User.find().select("-password").sort({ createdAt: -1 });
-
-    res.json({
-      success: true,
-      count: users.length,
-      users,
-    });
-  } catch (error) {
-    console.error("GET users error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Unable to load users",
-      error: error.message,
-    });
-  }
-});
-
-// UPDATE USER ROLE (Admin only)
-app.patch("/api/users/:id/role", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const { role } = req.body;
-
-    if (!["user", "admin"].includes(role)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid role. Must be 'user' or 'admin'",
-      });
-    }
-
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { role },
-      { new: true, runValidators: true }
-    ).select("-password");
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    res.json({
-      success: true,
-      message: "User role updated successfully",
-      user,
-    });
-  } catch (error) {
-    console.error("UPDATE user role error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Unable to update user role",
-      error: error.message,
-    });
-  }
-});
-
-// DELETE USER (Admin only)
-app.delete("/api/users/:id", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const user = await User.findByIdAndDelete(req.params.id);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    res.json({
-      success: true,
-      message: "User deleted successfully",
-    });
-  } catch (error) {
-    console.error("DELETE user error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Unable to delete user",
-      error: error.message,
-    });
-  }
-});
-
-/* =========================
-   RESERVATIONS
-========================= */
-
-app.get("/api/reservations", async (req, res) => {
-  try {
-    const reservations =
-      await Reservation.find()
-        .populate("accommodation")
-        .populate("user")
-        .sort({
+app.get(
+  "/api/accommodations",
+  async (req, res) => {
+    try {
+      const accommodations =
+        await Accommodation.find().sort({
           createdAt: -1,
         });
 
-    res.json({
-      success: true,
-      count: reservations.length,
-      reservations,
-    });
-  } catch (error) {
-    console.error("GET reservations error:", error);
+      res.json({
+        success: true,
+        count: accommodations.length,
+        accommodations,
+      });
+    } catch (error) {
+      console.error(
+        "GET ACCOMMODATIONS ERROR:",
+        error
+      );
 
-    res.status(500).json({
-      success: false,
-      message: "Unable to load reservations",
-      error: error.message,
-    });
+      res.status(500).json({
+        success: false,
+        message:
+          "Failed to fetch accommodations",
+      });
+    }
   }
-});
+);
 
-app.post("/api/reservations", async (req, res) => {
-  try {
-    const reservation =
-      await Reservation.create(req.body);
+/* GET ONE ACCOMMODATION */
 
-    const populatedReservation =
-      await Reservation.findById(
+app.get(
+  "/api/accommodations/:id",
+  async (req, res) => {
+    try {
+      const accommodation =
+        await Accommodation.findById(
+          req.params.id
+        );
+
+      if (!accommodation) {
+        return res.status(404).json({
+          success: false,
+          message: "Accommodation not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        accommodation,
+      });
+    } catch (error) {
+      console.error(
+        "GET ACCOMMODATION ERROR:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Failed to fetch accommodation",
+      });
+    }
+  }
+);
+
+/* CREATE ACCOMMODATION */
+
+app.post(
+  "/api/accommodations",
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const accommodation =
+        await Accommodation.create(req.body);
+
+      res.status(201).json({
+        success: true,
+        accommodation,
+      });
+    } catch (error) {
+      console.error(
+        "CREATE ACCOMMODATION ERROR:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Failed to create accommodation",
+      });
+    }
+  }
+);
+
+/* UPDATE ACCOMMODATION */
+
+app.put(
+  "/api/accommodations/:id",
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const accommodation =
+        await Accommodation.findByIdAndUpdate(
+          req.params.id,
+          req.body,
+          {
+            new: true,
+            runValidators: true,
+          }
+        );
+
+      if (!accommodation) {
+        return res.status(404).json({
+          success: false,
+          message: "Accommodation not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        accommodation,
+      });
+    } catch (error) {
+      console.error(
+        "UPDATE ACCOMMODATION ERROR:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Failed to update accommodation",
+      });
+    }
+  }
+);
+
+/* DELETE ACCOMMODATION */
+
+app.delete(
+  "/api/accommodations/:id",
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const accommodation =
+        await Accommodation.findByIdAndDelete(
+          req.params.id
+        );
+
+      if (!accommodation) {
+        return res.status(404).json({
+          success: false,
+          message: "Accommodation not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        message:
+          "Accommodation deleted successfully",
+      });
+    } catch (error) {
+      console.error(
+        "DELETE ACCOMMODATION ERROR:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Failed to delete accommodation",
+      });
+    }
+  }
+);
+
+/* =========================================================
+   USER ROUTES
+========================================================= */
+
+/* REGISTER */
+
+app.post(
+  "/api/users/register",
+  async (req, res) => {
+    try {
+      const {
+        username,
+        email,
+        password,
+        role,
+      } = req.body;
+
+      if (!username || !password) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Username and password are required",
+        });
+      }
+
+      const existingUser =
+        await User.findOne({
+          $or: [
+            { username },
+            ...(email
+              ? [{ email: email.toLowerCase() }]
+              : []),
+          ],
+        });
+
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Username or email already exists",
+        });
+      }
+
+      const hashedPassword =
+        await bcrypt.hash(password, 10);
+
+      const user =
+        await User.create({
+          username,
+          email: email
+            ? email.toLowerCase()
+            : undefined,
+          password: hashedPassword,
+          role:
+            role === "admin"
+              ? "admin"
+              : "user",
+        });
+
+      const token = jwt.sign(
+        {
+          id: user._id,
+          username: user.username,
+          role: user.role,
+        },
+        JWT_SECRET,
+        {
+          expiresIn: "7d",
+        }
+      );
+
+      res.status(201).json({
+        success: true,
+        token,
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "REGISTER ERROR:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Failed to register user",
+      });
+    }
+  }
+);
+
+/* LOGIN */
+
+app.post(
+  "/api/users/login",
+  async (req, res) => {
+    try {
+      const {
+        username,
+        email,
+        password,
+      } = req.body;
+
+      if ((!username && !email) || !password) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Username/email and password are required",
+        });
+      }
+
+      const identifier =
+        username || email;
+
+      const user =
+        await User.findOne({
+          $or: [
+            {
+              username: identifier,
+            },
+            {
+              email:
+                identifier.toLowerCase(),
+            },
+          ],
+        });
+
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message:
+            "Invalid username/email or password",
+        });
+      }
+
+      const passwordMatch =
+        await bcrypt.compare(
+          password,
+          user.password
+        );
+
+      if (!passwordMatch) {
+        return res.status(401).json({
+          success: false,
+          message:
+            "Invalid username/email or password",
+        });
+      }
+
+      const token = jwt.sign(
+        {
+          id: user._id,
+          username: user.username,
+          role: user.role,
+        },
+        JWT_SECRET,
+        {
+          expiresIn: "7d",
+        }
+      );
+
+      res.json({
+        success: true,
+        token,
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "LOGIN ERROR:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Login failed",
+      });
+    }
+  }
+);
+
+/* GET ALL USERS - ADMIN */
+
+app.get(
+  "/api/users",
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const users =
+        await User.find().select(
+          "-password"
+        );
+
+      res.json({
+        success: true,
+        users,
+      });
+    } catch (error) {
+      console.error(
+        "GET USERS ERROR:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Failed to fetch users",
+      });
+    }
+  }
+);
+
+/* UPDATE USER ROLE - ADMIN */
+
+app.patch(
+  "/api/users/:id/role",
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { role } = req.body;
+
+      if (
+        !["user", "admin"].includes(role)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid role",
+        });
+      }
+
+      const user =
+        await User.findByIdAndUpdate(
+          req.params.id,
+          { role },
+          {
+            new: true,
+          }
+        ).select("-password");
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        user,
+      });
+    } catch (error) {
+      console.error(
+        "UPDATE USER ROLE ERROR:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Failed to update user role",
+      });
+    }
+  }
+);
+
+/* DELETE USER - ADMIN */
+
+app.delete(
+  "/api/users/:id",
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const user =
+        await User.findByIdAndDelete(
+          req.params.id
+        );
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        message:
+          "User deleted successfully",
+      });
+    } catch (error) {
+      console.error(
+        "DELETE USER ERROR:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Failed to delete user",
+      });
+    }
+  }
+);
+
+/* =========================================================
+   RESERVATION ROUTES
+========================================================= */
+
+/* GET RESERVATIONS */
+
+app.get(
+  "/api/reservations",
+  async (req, res) => {
+    try {
+      const reservations =
+        await Reservation.find()
+          .populate("accommodation")
+          .populate("user", "-password")
+          .sort({
+            createdAt: -1,
+          });
+
+      res.json({
+        success: true,
+        reservations,
+      });
+    } catch (error) {
+      console.error(
+        "GET RESERVATIONS ERROR:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Failed to fetch reservations",
+      });
+    }
+  }
+);
+
+/* =========================================================
+   CREATE RESERVATION
+========================================================= */
+
+app.post(
+  "/api/reservations",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      console.log(
+        "\n=============================="
+      );
+      console.log(
+        "CREATE RESERVATION REQUEST"
+      );
+      console.log(
+        "REQUEST BODY:",
+        req.body
+      );
+      console.log(
+        "LOGGED IN USER:",
+        req.user
+      );
+      console.log(
+        "==============================\n"
+      );
+
+      const {
+        accommodation,
+        checkIn,
+        checkOut,
+        guests,
+        guestName,
+        guestEmail,
+      } = req.body;
+
+      /* -----------------------------------------
+         VALIDATE REQUIRED BOOKING DATA
+      ----------------------------------------- */
+
+      if (!accommodation) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Accommodation is required",
+        });
+      }
+
+      if (!checkIn) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Check-in date is required",
+        });
+      }
+
+      if (!checkOut) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Check-out date is required",
+        });
+      }
+
+      if (!guests) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Number of guests is required",
+        });
+      }
+
+      /* -----------------------------------------
+         FIND ACCOMMODATION
+      ----------------------------------------- */
+
+      if (
+        !mongoose.Types.ObjectId.isValid(
+          accommodation
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid accommodation ID",
+        });
+      }
+
+      const accommodationRecord =
+        await Accommodation.findById(
+          accommodation
+        );
+
+      if (!accommodationRecord) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Accommodation not found",
+        });
+      }
+
+      /* -----------------------------------------
+         VALIDATE DATES
+      ----------------------------------------- */
+
+      const startDate =
+        new Date(checkIn);
+
+      const endDate =
+        new Date(checkOut);
+
+      if (
+        Number.isNaN(
+          startDate.getTime()
+        ) ||
+        Number.isNaN(
+          endDate.getTime()
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid check-in or check-out date",
+        });
+      }
+
+      if (endDate <= startDate) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Check-out date must be after check-in date",
+        });
+      }
+
+      /* -----------------------------------------
+         VALIDATE GUEST COUNT
+      ----------------------------------------- */
+
+      const guestCount =
+        Number(guests);
+
+      if (
+        !Number.isInteger(
+          guestCount
+        ) ||
+        guestCount < 1
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Guests must be a valid number",
+        });
+      }
+
+      if (
+        accommodationRecord.guests &&
+        guestCount >
+          accommodationRecord.guests
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: `This accommodation allows a maximum of ${accommodationRecord.guests} guests`,
+        });
+      }
+
+      /* -----------------------------------------
+         GET LOGGED-IN USER
+      ----------------------------------------- */
+
+      let currentUser = null;
+
+      if (req.user && req.user.id) {
+        currentUser =
+          await User.findById(
+            req.user.id
+          );
+      }
+
+      /* -----------------------------------------
+         GUEST NAME
+      ----------------------------------------- */
+
+      const finalGuestName =
+        guestName ||
+        currentUser?.username ||
+        req.user?.username ||
+        "Guest";
+
+      /* -----------------------------------------
+         GUEST EMAIL
+      ----------------------------------------- */
+
+      const finalGuestEmail =
+        guestEmail ||
+        currentUser?.email ||
+        "";
+
+      if (!finalGuestEmail) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Guest email is required. Please make sure your account has an email address.",
+        });
+      }
+
+      /* -----------------------------------------
+         CALCULATE NUMBER OF NIGHTS
+      ----------------------------------------- */
+
+      const millisecondsPerNight =
+        1000 *
+        60 *
+        60 *
+        24;
+
+      const nights = Math.ceil(
+        (endDate - startDate) /
+          millisecondsPerNight
+      );
+
+      if (nights < 1) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Booking must be at least one night",
+        });
+      }
+
+      /* -----------------------------------------
+         CALCULATE PRICE
+      ----------------------------------------- */
+
+      const nightlyPrice =
+        Number(
+          accommodationRecord.price
+        ) || 0;
+
+      const cleaningFee =
+        Number(
+          accommodationRecord.cleaningFee
+        ) || 0;
+
+      const serviceFee =
+        Number(
+          accommodationRecord.serviceFee
+        ) || 0;
+
+      const occupancyTaxes =
+        Number(
+          accommodationRecord.occupancyTaxes
+        ) || 0;
+
+      const weeklyDiscount =
+        Number(
+          accommodationRecord.weeklyDiscount
+        ) || 0;
+
+      const basePrice =
+        nightlyPrice * nights;
+
+      let discount = 0;
+
+      /*
+        weeklyDiscount is treated as a percentage.
+        Example:
+        10 = 10% discount.
+      */
+
+      if (
+        nights >= 7 &&
+        weeklyDiscount > 0
+      ) {
+        discount =
+          basePrice *
+          (weeklyDiscount / 100);
+      }
+
+      const subtotal =
+        basePrice - discount;
+
+      const totalPrice =
+        subtotal +
+        cleaningFee +
+        serviceFee +
+        occupancyTaxes;
+
+      if (
+        !Number.isFinite(
+          totalPrice
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Unable to calculate reservation price",
+        });
+      }
+
+      /* -----------------------------------------
+         CREATE RESERVATION
+      ----------------------------------------- */
+
+      const reservation =
+        await Reservation.create({
+          accommodation:
+            accommodationRecord._id,
+
+          user:
+            currentUser?._id ||
+            req.user?.id ||
+            null,
+
+          guestName:
+            finalGuestName,
+
+          guestEmail:
+            finalGuestEmail,
+
+          checkIn:
+            startDate,
+
+          checkOut:
+            endDate,
+
+          guests:
+            guestCount,
+
+          totalPrice:
+            Number(
+              totalPrice.toFixed(2)
+            ),
+
+          status:
+            "confirmed",
+        });
+
+      /* -----------------------------------------
+         POPULATE RESERVATION
+      ----------------------------------------- */
+
+      const populatedReservation =
+        await Reservation.findById(
+          reservation._id
+        )
+          .populate(
+            "accommodation"
+          )
+          .populate(
+            "user",
+            "-password"
+          );
+
+      console.log(
+        "RESERVATION CREATED:",
         reservation._id
-      ).populate("accommodation");
+      );
 
-    res.status(201).json({
-      success: true,
-      message: "Reservation created successfully",
-      reservation: populatedReservation,
-    });
-  } catch (error) {
-    console.error("CREATE reservation error:", error);
+      console.log(
+        "GUEST:",
+        finalGuestName
+      );
 
-    res.status(400).json({
-      success: false,
-      message: "Unable to create reservation",
-      error: error.message,
-    });
-  }
-});
+      console.log(
+        "EMAIL:",
+        finalGuestEmail
+      );
 
-// UPDATE RESERVATION STATUS (Admin only)
-app.patch("/api/reservations/:id/status", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const { status } = req.body;
+      console.log(
+        "NIGHTS:",
+        nights
+      );
 
-    if (!["pending", "confirmed", "cancelled", "completed"].includes(status)) {
-      return res.status(400).json({
+      console.log(
+        "TOTAL:",
+        totalPrice
+      );
+
+      /* -----------------------------------------
+         SUCCESS RESPONSE
+      ----------------------------------------- */
+
+      res.status(201).json({
+        success: true,
+        message:
+          "Reservation created successfully",
+        reservation:
+          populatedReservation,
+      });
+    } catch (error) {
+      console.error(
+        "\nCREATE RESERVATION ERROR:",
+        error
+      );
+
+      console.error(
+        "ERROR MESSAGE:",
+        error.message
+      );
+
+      if (
+        error.name ===
+        "ValidationError"
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Reservation validation failed",
+          errors: Object.values(
+            error.errors
+          ).map(
+            (item) => item.message
+          ),
+        });
+      }
+
+      if (
+        error.name ===
+        "CastError"
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid reservation data",
+          error:
+            error.message,
+        });
+      }
+
+      res.status(500).json({
         success: false,
-        message: "Invalid status",
+        message:
+          "Failed to create reservation",
+        error:
+          error.message,
       });
     }
+  }
+);
 
-    const reservation = await Reservation.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true, runValidators: true }
-    ).populate("accommodation");
+/* =========================================================
+   UPDATE RESERVATION STATUS - ADMIN
+========================================================= */
 
-    if (!reservation) {
-      return res.status(404).json({
+app.patch(
+  "/api/reservations/:id/status",
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { status } = req.body;
+
+      if (
+        ![
+          "pending",
+          "confirmed",
+          "cancelled",
+        ].includes(status)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid reservation status",
+        });
+      }
+
+      const reservation =
+        await Reservation.findByIdAndUpdate(
+          req.params.id,
+          { status },
+          {
+            new: true,
+          }
+        );
+
+      if (!reservation) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Reservation not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        reservation,
+      });
+    } catch (error) {
+      console.error(
+        "UPDATE RESERVATION ERROR:",
+        error
+      );
+
+      res.status(500).json({
         success: false,
-        message: "Reservation not found",
+        message:
+          "Failed to update reservation",
       });
     }
-
-    res.json({
-      success: true,
-      message: "Reservation status updated successfully",
-      reservation,
-    });
-  } catch (error) {
-    console.error("UPDATE reservation status error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Unable to update reservation status",
-      error: error.message,
-    });
   }
-});
+);
 
-// DELETE RESERVATION (Admin only)
-app.delete("/api/reservations/:id", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const reservation = await Reservation.findByIdAndDelete(req.params.id);
+/* =========================================================
+   DELETE RESERVATION - ADMIN
+========================================================= */
 
-    if (!reservation) {
-      return res.status(404).json({
+app.delete(
+  "/api/reservations/:id",
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const reservation =
+        await Reservation.findByIdAndDelete(
+          req.params.id
+        );
+
+      if (!reservation) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Reservation not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        message:
+          "Reservation deleted successfully",
+      });
+    } catch (error) {
+      console.error(
+        "DELETE RESERVATION ERROR:",
+        error
+      );
+
+      res.status(500).json({
         success: false,
-        message: "Reservation not found",
+        message:
+          "Failed to delete reservation",
       });
     }
-
-    res.json({
-      success: true,
-      message: "Reservation deleted successfully",
-    });
-  } catch (error) {
-    console.error("DELETE reservation error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Unable to delete reservation",
-      error: error.message,
-    });
   }
-});
+);
 
-/* =========================
+/* =========================================================
    ERROR HANDLER
-========================= */
+========================================================= */
 
-app.use((err, req, res, next) => {
-  console.error("SERVER ERROR:", err);
+app.use(
+  (err, req, res, next) => {
+    console.error(
+      "SERVER ERROR:",
+      err
+    );
 
-  res.status(500).json({
-    success: false,
-    message: err.message || "Internal server error",
-  });
-});
+    res.status(500).json({
+      success: false,
+      message:
+        err.message ||
+        "Internal server error",
+    });
+  }
+);
 
-/* =========================
+/* =========================================================
    START SERVER
-========================= */
+========================================================= */
 
 async function startServer() {
   try {
     if (!MONGO_URI) {
       throw new Error(
-        "MONGO_URI is missing. Add MONGO_URI to the Render Environment Variables."
+        "MONGO_URI is not defined in .env"
       );
     }
 
-    await mongoose.connect(MONGO_URI);
+    await mongoose.connect(
+      MONGO_URI
+    );
 
-    console.log("MongoDB connected successfully");
+    console.log(
+      "MongoDB connected successfully"
+    );
 
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(
-        `Airbnb Capstone API running on port ${PORT}`
-      );
-    });
+    app.listen(
+      PORT,
+      "0.0.0.0",
+      () => {
+        console.log(
+          `Server running on port ${PORT}`
+        );
+      }
+    );
   } catch (error) {
     console.error(
-      "SERVER STARTUP FAILED:",
-      error.message
+      "Failed to start server:",
+      error
     );
 
     process.exit(1);

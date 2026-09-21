@@ -1,30 +1,56 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
-import CustomerHome from "./pages/CustomerHome";
+
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+
+import Home from "./pages/Home";
+import Listings from "./pages/Listings";
 import StayDetails from "./pages/StayDetails";
-import LocationResults from "./pages/LocationResults";
+import CreateReservation from "./pages/CreateReservation";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import CreateReservation from "./pages/CreateReservation";
+import Dashboard from "./pages/Dashboard";
+import ProtectedRoute from "./components/ProtectedRoute";
 
-function AuthRoute({ children }) {
-  const location = useLocation();
-  return localStorage.getItem("token")
-    ? children
-    : <Navigate to="/login" replace state={{ from: location.pathname, booking: location.state }} />;
-}
-
-export default function App() {
+function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<CustomerHome />} />
-        <Route path="/stays/:id" element={<StayDetails />} />
-        <Route path="/locations" element={<LocationResults />} />
+
+        {/* Home */}
+        <Route path="/" element={<Home />} />
+
+        {/* Listings */}
+        <Route path="/listings" element={<Listings />} />
+
+        {/* Property details */}
+        <Route path="/stay/:id" element={<StayDetails />} />
+
+        {/* Authentication */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/reservations/new/:id" element={<AuthRoute><CreateReservation /></AuthRoute>} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+
+        {/* Protected booking page */}
+        <Route
+          path="/reserve/:id"
+          element={
+            <ProtectedRoute>
+              <CreateReservation />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Protected dashboard */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+
       </Routes>
     </BrowserRouter>
   );
 }
+
+export default App;

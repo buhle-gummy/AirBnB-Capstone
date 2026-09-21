@@ -1,32 +1,64 @@
 const Reservation = require("../models/Reservation");
 const Accommodation = require("../models/Accommodation");
 
+// Calculate reservation total
 const calculateTotal = (accommodation, checkIn, checkOut) => {
-  const nights = Math.ceil((new Date(checkOut) - new Date(checkIn)) / 86400000);
-  const subtotal = nights * Number(accommodation.price || 0);
-  const discount = nights >= 7 ? Math.round((subtotal * Number(accommodation.weeklyDiscount || 0)) / 100) : 0;
-  const serviceFee = Math.round(((subtotal - discount) * Number(accommodation.serviceFee || 0)) / 100);
-  const taxes = Math.round(((subtotal - discount) * Number(accommodation.occupancyTaxes || 0)) / 100);
-  return subtotal - discount + Number(accommodation.cleaningFee || 0) + serviceFee + taxes;
+  const startDate = new Date(checkIn);
+  const endDate = new Date(checkOut);
+
+  const millisecondsPerDay = 1000 * 60 * 60 * 24;
+  const nights = Math.ceil(
+    (endDate - startDate) / millisecondsPerDay
+  );
+
+  const numberOfNights = Math.max(nights, 1);
+
+  const pricePerNight = Number(accommodation.price) || 0;
+  const cleaningFee = Number(accommodation.cleaningFee) || 0;
+  const serviceFee = Number(accommodation.serviceFee) || 0;
+  const occupancyTaxes = Number(accommodation.occupancyTaxes) || 0;
+
+  const weeklyDiscount =
+    Number(accommodation.weeklyDiscount) || 0;
+
+  let accommodationTotal =
+    pricePerNight * numberOfNights;
+
+  // Apply weekly discount when applicable
+  if (numberOfNights >= 7 && weeklyDiscount > 0) {
+    accommodationTotal =
+      accommodationTotal -
+      (accommodationTotal * weeklyDiscount) / 100;
+  }
+
+  return (
+    accommodationTotal +
+    cleaningFee +
+    serviceFee +
+    occupancyTaxes
+  );
 };
 
-// Create a reservation
+// CREATE RESERVATION
 const createReservation = async (req, res) => {
   try {
+    console.log("====================================");
+    console.log("CREATE RESERVATION REQUEST");
+    console.log("BODY:", req.body);
+    console.log("USER:", req.user);
+    console.log("====================================");
+
     const {
       accommodation,
       checkIn,
       checkOut,
       guests,
+      guestName,
+      guestEmail,
     } = req.body;
 
-    // Validate required fields
-    if (
-      !accommodation ||
-      !checkIn ||
-      !checkOut ||
-      !guests
-    ) {
+    // Validate required booking fields
+    if (!accommodation || !checkIn || !checkOut || !guests) {
       return res.status(400).json({
         success: false,
         message:
@@ -34,10 +66,32 @@ const createReservation = async (req, res) => {
       });
     }
 
+    // Find accommodation
+    const accommodationRecord =
+      await Accommodation.findById(accommodation);
+
+    if (!accommodationRecord) {
+      return res.status(404).json({
+        success: false,
+        message: "Accommodation not found",
+      });
+    }
+
     // Validate dates
     const startDate = new Date(checkIn);
     const endDate = new Date(checkOut);
-    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || startDate >= endDate) {
+
+    if (
+      Number.isNaN(startDate.getTime()) ||
+      Number.isNaN(endDate.getTime())
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid check-in or check-out date",
+      });
+    }
+
+    if (startDate >= endDate) {
       return res.status(400).json({
         success: false,
         message: "Check-out date must be after check-in date",
@@ -45,39 +99,88 @@ const createReservation = async (req, res) => {
     }
 
     // Validate guests
-    if (guests < 1) {
+    const guestCount = Number(guests);
+
+    if (!Number.isInteger(guestCount) || guestCount < 1) {
       return res.status(400).json({
         success: false,
         message: "At least 1 guest is required",
       });
     }
 
-    const accommodationRecord = await Accommodation.findById(accommodation);
-    if (!accommodationRecord) {
-      return res.status(404).json({ success: false, message: "Accommodation not found" });
-    }
-    if (Number(guests) > accommodationRecord.guests) {
-      return res.status(400).json({ success: false, message: `This accommodation allows up to ${accommodationRecord.guests} guests` });
+    if (
+      accommodationRecord.guests &&
+      guestCount > Number(accommodationRecord.guests)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: `This accommodation allows up to ${accommodationRecord.guests} guests`,
+      });
     }
 
-    const calculatedTotal = calculateTotal(accommodationRecord, checkIn, checkOut);
+    // Get guest information
+    const finalGuestName =
+      guestName ||
+      req.user?.name ||
+      req.user?.username ||
+      "Guest";
 
+    const finalGuestEmail =
+      guestEmail ||
+      req.user?.email ||
+      "";
+
+    if (!finalGuestEmail) {
+      return res.status(400).json({
+        success: false,
+        message: "Guest email is required",
+      });
+    }
+
+    // Calculate total price
+    const calculatedTotal = calculateTotal(
+      accommodationRecord,
+      checkIn,
+      checkOut
+    );
+
+    console.log("CALCULATED TOTAL:", calculatedTotal);
+    console.log("GUEST NAME:", finalGuestName);
+    console.log("GUEST EMAIL:", finalGuestEmail);
+
+    // Create reservation
     const reservation = await Reservation.create({
       user: req.user.id,
-      accommodation,
-      checkIn,
-      checkOut,
-      guests,
+      accommodation: accommodationRecord._id,
+
+      checkIn: startDate,
+      checkOut: endDate,
+
+      guests: guestCount,
+
+      guestName: finalGuestName,
+      guestEmail: finalGuestEmail,
+
       totalPrice: calculatedTotal,
     });
 
-    res.status(201).json({
+    console.log(
+      "RESERVATION CREATED:",
+      reservation._id
+    );
+
+    return res.status(201).json({
       success: true,
       message: "Reservation created successfully",
       reservation,
     });
   } catch (error) {
-    res.status(400).json({
+    console.error(
+      "CREATE RESERVATION ERROR:",
+      error
+    );
+
+    return res.status(500).json({
       success: false,
       message: "Failed to create reservation",
       error: error.message,
@@ -85,21 +188,20 @@ const createReservation = async (req, res) => {
   }
 };
 
-
-// Get all reservations
+// GET ALL RESERVATIONS
 const getReservations = async (req, res) => {
   try {
-    const query = req.user.role === "admin" ? {} : { user: req.user.id };
-    const reservations = await Reservation.find(query)
-      .populate("user", "username email")
-      .populate("accommodation", "title location price");
+    const reservations = await Reservation.find()
+      .populate("user", "name email")
+      .populate("accommodation");
 
-    res.status(200).json({
+    res.json({
       success: true,
-      count: reservations.length,
       reservations,
     });
   } catch (error) {
+    console.error("GET RESERVATIONS ERROR:", error);
+
     res.status(500).json({
       success: false,
       message: "Failed to fetch reservations",
@@ -108,13 +210,14 @@ const getReservations = async (req, res) => {
   }
 };
 
-
-// Get one reservation
+// GET RESERVATION BY ID
 const getReservationById = async (req, res) => {
   try {
-    const reservation = await Reservation.findById(req.params.id)
-      .populate("user", "username email")
-      .populate("accommodation", "title location price");
+    const reservation = await Reservation.findById(
+      req.params.id
+    )
+      .populate("user", "name email")
+      .populate("accommodation");
 
     if (!reservation) {
       return res.status(404).json({
@@ -123,31 +226,99 @@ const getReservationById = async (req, res) => {
       });
     }
 
-    if (reservation.user._id.toString() !== req.user.id && req.user.role !== "admin") {
-      return res.status(403).json({
-        success: false,
-        message: "You are not authorized to view this reservation",
-      });
-    }
-
-    res.status(200).json({
+    res.json({
       success: true,
       reservation,
     });
   } catch (error) {
-    res.status(400).json({
+    console.error(
+      "GET RESERVATION ERROR:",
+      error
+    );
+
+    res.status(500).json({
       success: false,
-      message: "Invalid reservation ID",
+      message: "Failed to fetch reservation",
       error: error.message,
     });
   }
 };
 
+// GET USER RESERVATIONS
+const getUserReservations = async (req, res) => {
+  try {
+    const reservations = await Reservation.find({
+      user: req.user.id,
+    })
+      .populate("accommodation")
+      .sort({ createdAt: -1 });
 
-// Update a reservation
+    res.json({
+      success: true,
+      reservations,
+    });
+  } catch (error) {
+    console.error(
+      "GET USER RESERVATIONS ERROR:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch user reservations",
+      error: error.message,
+    });
+  }
+};
+
+// GET HOST RESERVATIONS
+const getHostReservations = async (req, res) => {
+  try {
+    const accommodations =
+      await Accommodation.find({
+        host: req.user.id,
+      }).select("_id");
+
+    const accommodationIds =
+      accommodations.map(
+        (item) => item._id
+      );
+
+    const reservations =
+      await Reservation.find({
+        accommodation: {
+          $in: accommodationIds,
+        },
+      })
+        .populate("user", "name email")
+        .populate("accommodation")
+        .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      reservations,
+    });
+  } catch (error) {
+    console.error(
+      "GET HOST RESERVATIONS ERROR:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch host reservations",
+      error: error.message,
+    });
+  }
+};
+
+// UPDATE RESERVATION
 const updateReservation = async (req, res) => {
   try {
-    const reservation = await Reservation.findById(req.params.id);
+    const reservation =
+      await Reservation.findById(
+        req.params.id
+      );
 
     if (!reservation) {
       return res.status(404).json({
@@ -156,75 +327,70 @@ const updateReservation = async (req, res) => {
       });
     }
 
-    // Only the reservation owner or an admin can update it
     if (
-      reservation.user.toString() !== req.user.id &&
-      req.user.role !== "admin"
+      reservation.user.toString() !==
+      req.user.id.toString()
     ) {
       return res.status(403).json({
         success: false,
         message:
-          "You are not authorized to update this reservation",
+          "You are not allowed to update this reservation",
       });
     }
 
-    // Validate dates if they are being updated
-    const checkIn = req.body.checkIn || reservation.checkIn;
-    const checkOut = req.body.checkOut || reservation.checkOut;
+    const {
+      checkIn,
+      checkOut,
+      guests,
+    } = req.body;
 
-    if (Number.isNaN(new Date(checkIn).getTime()) || Number.isNaN(new Date(checkOut).getTime()) || new Date(checkIn) >= new Date(checkOut)) {
-      return res.status(400).json({
-        success: false,
-        message: "Check-out date must be after check-in date",
-      });
-    }
-
-    // Validate guests if provided
-    if (
-      req.body.guests !== undefined &&
-      req.body.guests < 1
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "At least 1 guest is required",
-      });
+    if (checkIn) {
+      reservation.checkIn = new Date(
+        checkIn
+      );
     }
 
-    // Validate total price if provided
-    if (
-      req.body.totalPrice !== undefined &&
-      req.body.totalPrice < 0
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Total price cannot be negative",
-      });
+    if (checkOut) {
+      reservation.checkOut = new Date(
+        checkOut
+      );
     }
 
-    const allowedUpdates = {};
-    for (const field of ["checkIn", "checkOut", "guests"]) {
-      if (req.body[field] !== undefined) allowedUpdates[field] = req.body[field];
+    if (guests) {
+      reservation.guests = Number(guests);
     }
-    Object.assign(reservation, allowedUpdates);
 
-    const accommodationRecord = await Accommodation.findById(reservation.accommodation);
-    if (!accommodationRecord) {
-      return res.status(404).json({ success: false, message: "Accommodation not found" });
+    // Recalculate total if dates changed
+    if (checkIn || checkOut) {
+      const accommodation =
+        await Accommodation.findById(
+          reservation.accommodation
+        );
+
+      if (accommodation) {
+        reservation.totalPrice =
+          calculateTotal(
+            accommodation,
+            reservation.checkIn,
+            reservation.checkOut
+          );
+      }
     }
-    if (Number(reservation.guests) > accommodationRecord.guests) {
-      return res.status(400).json({ success: false, message: `This accommodation allows up to ${accommodationRecord.guests} guests` });
-    }
-    reservation.totalPrice = calculateTotal(accommodationRecord, reservation.checkIn, reservation.checkOut);
 
     await reservation.save();
 
-    res.status(200).json({
+    res.json({
       success: true,
       message: "Reservation updated successfully",
       reservation,
     });
   } catch (error) {
-    res.status(400).json({
+    console.error(
+      "UPDATE RESERVATION ERROR:",
+      error
+    );
+
+    res.status(500).json({
       success: false,
       message: "Failed to update reservation",
       error: error.message,
@@ -232,33 +398,16 @@ const updateReservation = async (req, res) => {
   }
 };
 
-
-// Update reservation status - Admin only
-const updateReservationStatus = async (req, res) => {
+// UPDATE RESERVATION STATUS
+const updateReservationStatus = async (
+  req,
+  res
+) => {
   try {
-    const { status } = req.body;
-
-    // Allowed statuses
-    const allowedStatuses = [
-      "pending",
-      "confirmed",
-      "cancelled",
-      "completed",
-    ];
-
-    // Validate status
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid status. Status must be pending, confirmed, cancelled, or completed",
-      });
-    }
-
-    // Find reservation
-    const reservation = await Reservation.findById(
-      req.params.id
-    );
+    const reservation =
+      await Reservation.findById(
+        req.params.id
+      );
 
     if (!reservation) {
       return res.status(404).json({
@@ -267,28 +416,25 @@ const updateReservationStatus = async (req, res) => {
       });
     }
 
-    // Update status
+    const { status } = req.body;
+
     reservation.status = status;
 
     await reservation.save();
 
-    // Get updated reservation with user and accommodation
-    const updatedReservation =
-      await Reservation.findById(reservation._id)
-        .populate("user", "username email")
-        .populate(
-          "accommodation",
-          "title location price"
-        );
-
-    res.status(200).json({
+    res.json({
       success: true,
       message:
         "Reservation status updated successfully",
-      reservation: updatedReservation,
+      reservation,
     });
   } catch (error) {
-    res.status(400).json({
+    console.error(
+      "UPDATE STATUS ERROR:",
+      error
+    );
+
+    res.status(500).json({
       success: false,
       message:
         "Failed to update reservation status",
@@ -297,29 +443,16 @@ const updateReservationStatus = async (req, res) => {
   }
 };
 
-
-const getUserReservations = async (req, res) => {
-  return getReservations(req, res);
-};
-
-const getHostReservations = async (req, res) => {
-  if (req.user.role !== "admin" && req.user.role !== "host") {
-    return res.status(403).json({ success: false, message: "Host access required" });
-  }
+// DELETE RESERVATION
+const deleteReservation = async (
+  req,
+  res
+) => {
   try {
-    const properties = req.user.role === "admin" ? [] : await Accommodation.find({ hostId: req.user.id }).select("_id");
-    const query = req.user.role === "admin" ? {} : { accommodation: { $in: properties.map((property) => property._id) } };
-    const reservations = await Reservation.find(query).populate("user", "username email").populate("accommodation", "title location price");
-    return res.status(200).json({ success: true, count: reservations.length, reservations });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: "Failed to fetch host reservations" });
-  }
-};
-
-// Delete/cancel a reservation
-const deleteReservation = async (req, res) => {
-  try {
-    const reservation = await Reservation.findById(req.params.id);
+    const reservation =
+      await Reservation.findById(
+        req.params.id
+      );
 
     if (!reservation) {
       return res.status(404).json({
@@ -328,26 +461,31 @@ const deleteReservation = async (req, res) => {
       });
     }
 
-    // Only the reservation owner or an admin can delete it
     if (
-      reservation.user.toString() !== req.user.id &&
-      req.user.role !== "admin"
+      reservation.user.toString() !==
+      req.user.id.toString()
     ) {
       return res.status(403).json({
         success: false,
         message:
-          "You are not authorized to delete this reservation",
+          "You are not allowed to delete this reservation",
       });
     }
 
     await reservation.deleteOne();
 
-    res.status(200).json({
+    res.json({
       success: true,
-      message: "Reservation deleted successfully",
+      message:
+        "Reservation deleted successfully",
     });
   } catch (error) {
-    res.status(400).json({
+    console.error(
+      "DELETE RESERVATION ERROR:",
+      error
+    );
+
+    res.status(500).json({
       success: false,
       message:
         "Failed to delete reservation",
@@ -355,7 +493,6 @@ const deleteReservation = async (req, res) => {
     });
   }
 };
-
 
 module.exports = {
   createReservation,

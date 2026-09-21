@@ -1,73 +1,145 @@
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import AirbnbMark from "../components/AirbnbMark";
-import { API_URL } from "../config/api";
+import { Link, useNavigate } from "react-router-dom";
 
-function Register() {
+import Navbar from "../components/Navbar";
+import { api } from "../services/api";
+
+import "./Auth.css";
+
+export default function Register() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const [form, setForm] = useState({ username: "", email: "", password: "" });
-  const [message, setMessage] = useState("");
+
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+  });
+
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const updateField = (field) => (event) => {
-    setForm((current) => ({ ...current, [field]: event.target.value }));
-  };
+  function change(event) {
+    setForm({
+      ...form,
+      [event.target.name]: event.target.value,
+    });
+  }
 
-  const submit = async (event) => {
+  async function submit(event) {
     event.preventDefault();
-    setMessage("");
+
+    setError("");
     setLoading(true);
+
     try {
-      const baseUrl = API_URL || "/api";
-      const response = await fetch(`${baseUrl}/users/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, email: form.email.trim().toLowerCase() }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Registration failed");
+      const data = await api.register(form);
 
-      const login = await fetch(`${baseUrl}/users/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.email.trim().toLowerCase(), password: form.password }),
-      });
-      const loginData = await login.json();
-      if (!login.ok) throw new Error(loginData.message || "Account created, but sign-in failed");
+      const token =
+        data?.token ||
+        data?.accessToken ||
+        data?.data?.token;
 
-      localStorage.setItem("token", loginData.token);
-      localStorage.setItem("user", JSON.stringify(loginData.user));
-      const destination = location.state?.from || "/";
-      navigate(destination, { replace: true, state: location.state?.booking });
-    } catch (error) {
-      setMessage(error.message || "Unable to create your account.");
+      if (token) {
+        localStorage.setItem(
+          "token",
+          token
+        );
+
+        localStorage.setItem(
+          "user",
+          JSON.stringify(
+            data?.user ||
+              data?.data?.user ||
+              {}
+          )
+        );
+
+        navigate("/dashboard");
+      } else {
+        navigate("/login");
+      }
+    } catch (err) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
-    <div className="login-page">
-      <div className="login-card">
-        <Link to="/" className="login-brand"><span className="admin-brand-mark"><AirbnbMark /></span>Airbnb</Link>
-        <p className="admin-kicker">JOIN AIRBNB</p>
-        <h1>Create your account</h1>
-        <p>Save inspiring stays and make your next reservation with ease.</p>
-        <form onSubmit={submit}>
-          <label htmlFor="username">Full name</label>
-          <input id="username" value={form.username} minLength="2" onChange={updateField("username")} placeholder="Your name" autoComplete="name" required />
-          <label htmlFor="register-email">Email address</label>
-          <input id="register-email" type="email" value={form.email} onChange={updateField("email")} placeholder="you@example.com" autoComplete="email" required />
-          <label htmlFor="register-password">Password</label>
-          <input id="register-password" type="password" value={form.password} minLength="6" onChange={updateField("password")} placeholder="At least 6 characters" autoComplete="new-password" required />
-          <button type="submit" disabled={loading}>{loading ? "Creating your account..." : "Create account"}</button>
+    <>
+      <Navbar />
+
+      <main className="auth-page">
+        <form
+          className="auth-card"
+          onSubmit={submit}
+        >
+          <h1>Create your account</h1>
+
+          <p>
+            Join us and start discovering
+            beautiful stays.
+          </p>
+
+          <label>
+            Full name
+
+            <input
+              name="name"
+              value={form.name}
+              onChange={change}
+              required
+            />
+          </label>
+
+          <label>
+            Email
+
+            <input
+              type="email"
+              name="email"
+              value={form.email}
+              onChange={change}
+              required
+            />
+          </label>
+
+          <label>
+            Password
+
+            <input
+              type="password"
+              name="password"
+              minLength="6"
+              value={form.password}
+              onChange={change}
+              required
+            />
+          </label>
+
+          {error && (
+            <div className="form-error">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+          >
+            {loading
+              ? "Creating..."
+              : "Create account"}
+          </button>
+
+          <p className="auth-footer">
+            Already have an account?{" "}
+            <Link to="/login">
+              Log in
+            </Link>
+          </p>
         </form>
-        {message && <p className="login-message" role="alert">{message}</p>}
-        <p className="auth-switch">Already have an account? <Link to="/login" state={location.state}>Sign in</Link></p>
-      </div>
-    </div>
+      </main>
+    </>
   );
 }
-
-export default Register;
